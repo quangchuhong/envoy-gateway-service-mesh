@@ -1,0 +1,120 @@
+{{- $r := .Values.resilience -}}
+# Mỗi HTTPRoute có MỘT BackendTrafficPolicy riêng (một route chỉ nên có một policy cùng loại).
+---
+# Route chính: rate limit theo user (sub), least request, outlier detection, retry an toàn
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: orders-api-traffic
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: orders-api
+  rateLimit:
+    type: Global
+    global:
+      rules:
+        # Header x-jwt-sub do bước JWT sinh ra từ claim "sub" (client gửi giả sẽ bị xoá ở ClientTrafficPolicy).
+        # Distinct = mỗi giá trị (mỗi user / mỗi client máy) có bộ đếm riêng.
+        - clientSelectors:
+            - headers:
+                - name: x-jwt-sub
+                  type: Distinct
+          limit:
+            requests: {{ .Values.rateLimit.requestsPerMinutePerSubject }}
+            unit: Minute
+  loadBalancer:
+    type: LeastRequest
+  timeout:
+    http:
+      requestTimeout: {{ $r.main.requestTimeout }}
+  retry:
+    numRetries: 2
+    retryOn:
+      triggers:
+        - connect-failure
+        - reset
+        - refused-stream
+  healthCheck:
+    passive:
+      consecutive5XxErrors: 5
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# RETRY: thử lại khi backend trả 500/502/503, mỗi lần thử tối đa {{ $r.unstable.perRetryTimeout }}
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: orders-unstable-traffic
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: orders-unstable
+  timeout:
+    http:
+      requestTimeout: {{ $r.unstable.requestTimeout }}
+  retry:
+    numRetries: {{ $r.unstable.numRetries }}
+    perRetry:
+      timeout: {{ $r.unstable.perRetryTimeout }}
+      backOff:
+        baseInterval: 50ms
+        maxInterval: 500ms
+    retryOn:
+      httpStatusCodes: [500, 502, 503]
+      triggers:
+        - retriable-status-codes
+        - connect-failure
+        - reset
+---
+# TIMEOUT + CIRCUIT BREAKER: request quá {{ $r.slow.requestTimeout }} -> 504;
+# vượt ngưỡng kết nối/đang chờ -> 503 ngay (không dồn tải vào backend đang chậm)
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: orders-slow-traffic
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: orders-slow
+  timeout:
+    http:
+      requestTimeout: {{ $r.slow.requestTimeout }}
+  circuitBreaker:
+    maxConnections: {{ $r.slow.circuitBreaker.maxConnections }}
+    maxPendingRequests: {{ $r.slow.circuitBreaker.maxPendingRequests }}
+    maxParallelRequests: {{ $r.slow.circuitBreaker.maxParallelRequests }}
+---
+# FAULT INJECTION: {{ .Values.chaos.abortPercent }}% trả {{ .Values.chaos.abortStatus }}, {{ .Values.chaos.delayPercent }}% chậm thêm {{ .Values.chaos.delay }}
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: orders-chaos-traffic
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: orders-chaos
+  faultInjection:
+    abort:
+      httpStatus: {{ .Values.chaos.abortStatus }}
+      percentage: {{ .Values.chaos.abortPercent }}
+    delay:
+      fixedDelay: {{ .Values.chaos.delay }}
+      percentage: {{ .Values.chaos.delayPercent }}

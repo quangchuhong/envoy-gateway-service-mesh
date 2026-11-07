@@ -1,0 +1,54 @@
+{{- $k := .Values.apiKeys -}}
+{{- $writers := list -}}
+{{- range .Values.tiers }}{{- if .allowWrite }}{{- $writers = append $writers .clientId }}{{- end }}{{- end -}}
+# Partner API:
+#  API key : client gửi "{{ $k.header }}: <key>". Envoy so khớp với Secret {{ $k.secretName }}.
+#            Thiếu/sai key -> 401. Đúng key -> gắn "{{ $k.clientIdHeader }}: <client id>" và XOÁ header chứa key
+#            (sanitize) trước khi chuyển vào backend.
+#  AuthZ   : xét theo thứ tự, không khớp -> 403
+#            - Ghi (POST/PUT/PATCH/DELETE): chỉ partner {{ join ", " $writers }}, từ IP trong allowlist
+#            - Đọc (GET/HEAD)             : mọi partner hợp lệ, từ IP trong allowlist
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: partner-api-auth
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: partner-api
+  apiKeyAuth:
+    credentialRefs:
+      - kind: Secret
+        name: {{ $k.secretName }}
+    extractFrom:
+      - headers:
+          - {{ $k.header }}
+    forwardClientIDHeader: {{ $k.clientIdHeader }}
+    sanitize: true
+  authorization:
+    defaultAction: Deny
+    rules:
+      {{- if $writers }}
+      - name: write-by-tier
+        action: Allow
+        operation:
+          methods: ["POST", "PUT", "PATCH", "DELETE"]
+        principal:
+          clientCIDRs:
+            {{- toYaml .Values.allowedCIDRs | nindent 12 }}
+          headers:
+            - name: {{ $k.clientIdHeader }}
+              values:
+                {{- toYaml $writers | nindent 16 }}
+      {{- end }}
+      - name: read-any-partner
+        action: Allow
+        operation:
+          methods: ["GET", "HEAD"]
+        principal:
+          clientCIDRs:
+            {{- toYaml .Values.allowedCIDRs | nindent 12 }}

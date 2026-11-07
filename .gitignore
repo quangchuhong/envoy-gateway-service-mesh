@@ -1,0 +1,7 @@
+# Thông tin môi trường thật / bí mật - KHÔNG commit
+config/demo.env
+config/cognito.env
+helm/values/generated/
+rendered/
+*.tgz
+tests/results/

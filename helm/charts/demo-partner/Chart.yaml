@@ -1,0 +1,6 @@
+apiVersion: v2
+name: demo-partner
+description: "App 3 - Partner API: xác thực API key, phân quyền theo partner + IP allowlist, rate limit theo gói (tier) của từng partner"
+type: application
+version: 0.1.0
+appVersion: "2.25.0"

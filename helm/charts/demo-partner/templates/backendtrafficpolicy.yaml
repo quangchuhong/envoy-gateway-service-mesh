@@ -1,0 +1,39 @@
+{{- $k := .Values.apiKeys -}}
+# Rate limit theo gói của từng partner. Header "{{ $k.clientIdHeader }}" do bước API key gắn vào
+# (client tự gửi header này sẽ bị xoá ở ClientTrafficPolicy, nên không giả mạo được gói khác).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: partner-api-traffic
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: partner-api
+  rateLimit:
+    type: Global
+    global:
+      rules:
+        {{- range .Values.tiers }}
+        - clientSelectors:
+            - headers:
+                - name: {{ $k.clientIdHeader }}
+                  type: Exact
+                  value: {{ .clientId }}
+          limit:
+            requests: {{ .requestsPerMinute }}
+            unit: Minute
+        {{- end }}
+  timeout:
+    http:
+      requestTimeout: {{ .Values.resilience.requestTimeout }}
+  retry:
+    numRetries: 2
+    retryOn:
+      triggers:
+        - connect-failure
+        - reset
+        - refused-stream

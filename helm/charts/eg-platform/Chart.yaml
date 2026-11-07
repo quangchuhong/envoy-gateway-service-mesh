@@ -1,0 +1,6 @@
+apiVersion: v2
+name: eg-platform
+description: Hạ tầng dùng chung của Envoy Gateway - GatewayClass, EnvoyProxy (data plane), Gateway, ClientTrafficPolicy, TLS, HTTP->HTTPS redirect
+type: application
+version: 0.1.0
+appVersion: "v1.9.3"

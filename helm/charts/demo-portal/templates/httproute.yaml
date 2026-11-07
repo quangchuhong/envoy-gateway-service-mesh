@@ -1,0 +1,58 @@
+{{- $w2 := int .Values.canary.v2Weight -}}
+# Routing của portal:
+#   - Header "{{ .Values.canary.header.name }}: {{ .Values.canary.header.value }}" -> luôn vào v2 (tester nội bộ)
+#   - Còn lại: canary theo trọng số v1 {{ sub 100 $w2 }}% / v2 {{ $w2 }}%
+#   - Thêm security headers vào mọi response
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: portal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    {{- include "demo.parentRef" . | nindent 4 }}
+  hostnames:
+    - {{ include "demo.host" . | quote }}
+  rules:
+    - name: canary-by-header
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+          headers:
+            - name: {{ .Values.canary.header.name }}
+              value: {{ .Values.canary.header.value | quote }}
+      filters:
+        {{- include "portal.securityHeaders" . | nindent 8 }}
+      backendRefs:
+        - name: portal-v2
+          port: 9898
+    - name: canary-by-weight
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+      filters:
+        {{- include "portal.securityHeaders" . | nindent 8 }}
+      backendRefs:
+        - name: portal-v1
+          port: 9898
+          weight: {{ sub 100 $w2 }}
+        - name: portal-v2
+          port: 9898
+          weight: {{ $w2 }}
+{{- define "portal.securityHeaders" -}}
+- type: ResponseHeaderModifier
+  responseHeaderModifier:
+    set:
+      - name: Strict-Transport-Security
+        value: "max-age=31536000; includeSubDomains"
+      - name: X-Frame-Options
+        value: DENY
+      - name: X-Content-Type-Options
+        value: nosniff
+      - name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+{{- end }}

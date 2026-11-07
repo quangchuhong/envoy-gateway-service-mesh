@@ -1,0 +1,6 @@
+apiVersion: v2
+name: demo-orders
+description: "App 2 - Orders REST API: JWT AWS Cognito (user + machine), phân quyền theo group/scope, rate limit theo user, canary + header routing, URL rewrite, CORS, retry, timeout, circuit breaker, fault injection"
+type: application
+version: 0.1.0
+appVersion: "2.25.0"

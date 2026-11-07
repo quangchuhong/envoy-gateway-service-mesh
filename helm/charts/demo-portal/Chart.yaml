@@ -1,0 +1,6 @@
+apiVersion: v2
+name: demo-portal
+description: "App 1 - Web Portal: đăng nhập OIDC với AWS Cognito tại Envoy Gateway, phân quyền theo cognito:groups, canary v1/v2, security headers, rate limit theo IP"
+type: application
+version: 0.1.0
+appVersion: "6.15.0"

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: eg-redis
+description: Redis đơn giản làm backend cho Global Rate Limit của Envoy Gateway (chỉ dùng cho demo)
+type: application
+version: 0.1.0
+appVersion: "7.4"

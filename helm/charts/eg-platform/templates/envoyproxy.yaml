@@ -1,0 +1,91 @@
+{{- $p := .Values.envoyProxy -}}
+# EnvoyProxy: cấu hình data plane (Deployment/Service/HPA/PDB/log) mà Envoy Gateway
+# tự tạo cho mỗi Gateway thuộc GatewayClass {{ .Values.gatewayClass.name }}.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: {{ $p.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "eg-platform.labels" . | nindent 4 }}
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        replicas: {{ $p.replicas }}
+        container:
+          resources:
+            {{- toYaml $p.resources | nindent 12 }}
+        pod:
+          topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: topology.kubernetes.io/zone
+              whenUnsatisfiable: ScheduleAnyway
+              labelSelector:
+                matchLabels:
+                  gateway.envoyproxy.io/owning-gateway-name: {{ .Values.gateway.name }}
+      {{- if $p.hpa.enabled }}
+      envoyHpa:
+        minReplicas: {{ $p.hpa.minReplicas }}
+        maxReplicas: {{ $p.hpa.maxReplicas }}
+        metrics:
+          - type: Resource
+            resource:
+              name: cpu
+              target:
+                type: Utilization
+                averageUtilization: {{ $p.hpa.cpuUtilization }}
+      {{- end }}
+      envoyPDB:
+        minAvailable: {{ $p.pdb.minAvailable }}
+      envoyService:
+        type: {{ $p.service.type }}
+        {{- if and (eq $p.service.type "LoadBalancer") $p.service.loadBalancerClass }}
+        loadBalancerClass: {{ $p.service.loadBalancerClass }}
+        {{- end }}
+        {{- if ne $p.service.type "ClusterIP" }}
+        externalTrafficPolicy: {{ $p.service.externalTrafficPolicy }}
+        {{- end }}
+        {{- $ann := include "eg-platform.serviceAnnotations" . | fromYaml | default dict }}
+        {{- $ann = merge (deepCopy ($p.service.annotations | default dict)) $ann }}
+        {{- with $ann }}
+        annotations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with $p.service.nlb.sourceRanges }}
+        loadBalancerSourceRanges:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+  shutdown:
+    drainTimeout: {{ $p.shutdown.drainTimeout }}
+    minDrainDuration: {{ $p.shutdown.minDrainDuration }}
+  {{- if $p.accessLog }}
+  telemetry:
+    accessLog:
+      settings:
+        - format:
+            type: JSON
+            json:
+              start_time: "%START_TIME%"
+              method: "%REQ(:METHOD)%"
+              authority: "%REQ(:AUTHORITY)%"
+              path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+              response_code: "%RESPONSE_CODE%"
+              response_flags: "%RESPONSE_FLAGS%"
+              duration_ms: "%DURATION%"
+              client_ip: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%"
+              x_forwarded_for: "%REQ(X-FORWARDED-FOR)%"
+              request_id: "%REQ(X-REQUEST-ID)%"
+              route_name: "%ROUTE_NAME%"
+              upstream_host: "%UPSTREAM_HOST%"
+              upstream_cluster: "%UPSTREAM_CLUSTER%"
+              user_sub: "%REQ(X-JWT-SUB)%"
+              client_id: "%REQ(X-JWT-CLIENT-ID)%"
+              partner_id: "%REQ(X-PARTNER-ID)%"
+              user_agent: "%REQ(USER-AGENT)%"
+          sinks:
+            - type: File
+              file:
+                path: /dev/stdout
+  {{- end }}

@@ -1,0 +1,74 @@
+{{- range $ver, $cfg := .Values.versions }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portal-{{ $ver }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "demo.labels" $ | nindent 4 }}
+    app: portal
+    version: {{ $ver }}
+spec:
+  replicas: {{ $cfg.replicas }}
+  selector:
+    matchLabels:
+      app: portal
+      version: {{ $ver }}
+  template:
+    metadata:
+      labels:
+        app: portal
+        version: {{ $ver }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: podinfo
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          command: ["./podinfo", "--port=9898", "--level=info"]
+          env:
+            - name: PODINFO_UI_MESSAGE
+              value: {{ $cfg.message | quote }}
+            - name: PODINFO_UI_COLOR
+              value: {{ $cfg.color | quote }}
+          ports:
+            - name: http
+              containerPort: 9898
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portal-{{ $ver }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "demo.labels" $ | nindent 4 }}
+    app: portal
+    version: {{ $ver }}
+spec:
+  selector:
+    app: portal
+    version: {{ $ver }}
+  ports:
+    - name: http
+      port: 9898
+      targetPort: http
+{{- end }}

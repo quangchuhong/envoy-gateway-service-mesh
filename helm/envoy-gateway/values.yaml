@@ -1,0 +1,35 @@
+# Values cho chart chính thức của Envoy Gateway (control plane)
+#
+#   helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
+#     --version v1.9.3 -n envoy-gateway-system -f helm/envoy-gateway/values.yaml --wait
+#
+# Toàn bộ khoá ở đây đã đối chiếu với values.yaml của gateway-helm v1.9.3.
+
+deployment:
+  # 2 replica control plane, có leader election
+  replicas: 2
+  envoyGateway:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 1024Mi
+
+config:
+  envoyGateway:
+    gateway:
+      controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    provider:
+      type: Kubernetes
+    logging:
+      level:
+        default: info
+    # Bật Global Rate Limit: Envoy Gateway sẽ tự triển khai Deployment "envoy-ratelimit"
+    # và trỏ nó về Redis (cài bằng chart helm/charts/eg-redis ở bước trước).
+    # Production: dùng Amazon ElastiCache (Redis/Valkey) có TLS + AUTH thay cho Redis trong cluster.
+    rateLimit:
+      backend:
+        type: Redis
+        redis:
+          url: redis.envoy-gateway-system.svc.cluster.local:6379

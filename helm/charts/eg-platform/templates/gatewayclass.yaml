@@ -1,0 +1,15 @@
+# GatewayClass: "Gateway nào thuộc lớp này thì do Envoy Gateway quản lý",
+# và mọi Gateway của lớp này dùng cấu hình data plane trong EnvoyProxy bên dưới.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: {{ .Values.gatewayClass.name }}
+  labels:
+    {{- include "eg-platform.labels" . | nindent 4 }}
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: {{ .Values.envoyProxy.name }}
+    namespace: {{ .Release.Namespace }}

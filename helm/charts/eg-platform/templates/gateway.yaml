@@ -1,0 +1,39 @@
+{{- $lbl := .Values.gateway.attachNamespaceLabel -}}
+# Gateway: điểm vào duy nhất. Envoy Gateway thấy Gateway này sẽ tự tạo
+# Deployment + Service (NLB) của Envoy theo EnvoyProxy "{{ .Values.envoyProxy.name }}".
+#
+# Listener HTTPS KHÔNG đặt "hostname": NLB (và F5 sau này) re-encrypt tới Envoy có thể không gửi SNI.
+# Nếu đặt hostname, Envoy sẽ match filter chain theo SNI và từ chối kết nối không có SNI.
+# Việc định tuyến theo domain do HTTPRoute.hostnames đảm nhận (dựa vào Host header).
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gateway.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "eg-platform.labels" . | nindent 4 }}
+spec:
+  gatewayClassName: {{ .Values.gatewayClass.name }}
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same          # chỉ route redirect HTTP->HTTPS của platform
+    - name: https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ .Values.tls.secretName }}
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              {{ $lbl.key }}: {{ $lbl.value | quote }}
+        kinds:
+          - kind: HTTPRoute

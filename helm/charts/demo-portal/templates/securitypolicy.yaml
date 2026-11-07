@@ -1,0 +1,105 @@
+{{- $c := .Values.cognito -}}
+# Xác thực + phân quyền cho portal, thực hiện NGAY TẠI Envoy (app không cần code login):
+#
+#  1) OIDC (Authorization Code) với AWS Cognito:
+#     chưa đăng nhập -> 302 sang Cognito Hosted UI -> quay lại /oauth2/callback
+#     -> Envoy đổi code lấy token, lưu ID token vào cookie "PortalIdToken".
+#  2) JWT: Envoy verify ID token trong cookie (chữ ký JWKS, issuer, audience = client id portal).
+#  3) Authorization theo claim "cognito:groups" (luật xét theo thứ tự, luật đầu tiên khớp được áp dụng):
+#     - path admin: chỉ group admin
+#     - path admin với group khác: từ chối
+#     - còn lại: thuộc 1 trong các group cho phép
+#     - không khớp luật nào (vd user chưa có group): 403
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: portal-auth
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: portal
+  oidc:
+    provider:
+      issuer: {{ $c.issuer | quote }}
+      {{- with $c.authorizationEndpoint }}
+      authorizationEndpoint: {{ . | quote }}
+      {{- end }}
+      {{- with $c.tokenEndpoint }}
+      tokenEndpoint: {{ . | quote }}
+      {{- end }}
+    clientID: {{ $c.clientId | quote }}
+    clientSecret:
+      name: {{ $c.clientSecretName }}
+    redirectURL: "https://{{ include "demo.host" . }}/oauth2/callback"
+    logoutPath: /logout
+    scopes:
+      {{- toYaml $c.scopes | nindent 6 }}
+    refreshToken: true
+    cookieNames:
+      idToken: PortalIdToken
+      accessToken: PortalAccessToken
+    cookieConfig:
+      sameSite: Lax
+    # Request AJAX/máy (có header này) chưa đăng nhập -> trả 401 thay vì redirect sang Cognito
+    denyRedirect:
+      headers:
+        - name: X-Requested-With
+          value: XMLHttpRequest
+  jwt:
+    providers:
+      - name: cognito
+        issuer: {{ $c.issuer | quote }}
+        audiences:
+          - {{ $c.clientId | quote }}
+        remoteJWKS:
+          uri: "{{ $c.issuer }}/.well-known/jwks.json"
+        extractFrom:
+          cookies:
+            - PortalIdToken
+        claimToHeaders:
+          - claim: email
+            header: x-user-email
+          - claim: sub
+            header: x-jwt-sub
+  authorization:
+    defaultAction: Deny
+    rules:
+      {{- range $i, $path := .Values.authz.adminPaths }}
+      - name: admin-only-{{ $i }}
+        action: Allow
+        operation:
+          path:
+            type: PathPrefix
+            value: {{ $path | quote }}
+        principal:
+          jwt:
+            provider: cognito
+            claims:
+              - name: "cognito:groups"
+                valueType: StringArray
+                values:
+                  {{- toYaml $.Values.authz.adminGroups | nindent 18 }}
+      # Luật bắt buộc có principal: dùng "mọi IP" để luật áp cho tất cả user còn lại
+      - name: deny-admin-path-{{ $i }}
+        action: Deny
+        operation:
+          path:
+            type: PathPrefix
+            value: {{ $path | quote }}
+        principal:
+          clientCIDRs: ["0.0.0.0/0", "::/0"]
+      {{- end }}
+      - name: allow-portal-groups
+        action: Allow
+        principal:
+          jwt:
+            provider: cognito
+            claims:
+              - name: "cognito:groups"
+                valueType: StringArray
+                values:
+                  {{- toYaml .Values.authz.allowedGroups | nindent 18 }}

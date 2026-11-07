@@ -1,0 +1,43 @@
+# Envoy -> backend của portal: rate limit theo IP, timeout, retry an toàn, load balancing
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: portal-traffic
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: portal
+  rateLimit:
+    type: Global
+    global:
+      rules:
+        # Mỗi IP client có bộ đếm riêng (Distinct)
+        - clientSelectors:
+            - sourceCIDR:
+                type: Distinct
+                value: 0.0.0.0/0
+          limit:
+            requests: {{ .Values.rateLimit.requestsPerMinutePerIP }}
+            unit: Minute
+  loadBalancer:
+    type: LeastRequest
+  timeout:
+    http:
+      requestTimeout: {{ .Values.resilience.requestTimeout }}
+  retry:
+    numRetries: {{ .Values.resilience.retries }}
+    retryOn:
+      triggers:
+        - connect-failure
+        - reset
+        - refused-stream
+  healthCheck:
+    passive:
+      consecutive5XxErrors: 5
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50

@@ -1,0 +1,13 @@
+# Redis lưu bộ đếm rate limit. Không cần persistence: mất dữ liệu chỉ làm reset bộ đếm.
+# Production: thay bằng Amazon ElastiCache (Redis/Valkey) Multi-AZ, bật TLS + AUTH.
+image:
+  repository: docker.io/library/redis
+  tag: 7.4-alpine
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi

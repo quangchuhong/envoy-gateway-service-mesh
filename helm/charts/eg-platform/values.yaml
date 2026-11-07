@@ -1,0 +1,94 @@
+# ---------------------------------------------------------------------------
+# eg-platform: phần hạ tầng dùng chung, do platform team quản lý.
+# Cài vào namespace "eg-gateway":
+#   helm upgrade --install eg-platform helm/charts/eg-platform -n eg-gateway --create-namespace \
+#     -f helm/values/eg-platform.yaml
+# ---------------------------------------------------------------------------
+
+# Domain gốc của các app demo: portal.<domain>, api.<domain>, partner.<domain>
+domain: demo.example.com
+
+gatewayClass:
+  name: eg-demo
+
+gateway:
+  name: eg-gateway
+  # Chỉ namespace có label này mới được gắn HTTPRoute vào Gateway
+  # (team app không thể tự ý "chiếm" Gateway từ namespace bất kỳ)
+  attachNamespaceLabel:
+    key: gateway.demo.io/attach
+    value: "true"
+
+# ---------------------------------------------------------------- TLS
+# Cert mà Envoy dùng để terminate TLS.
+# - Chế độ "nlb-tls" (mặc định): NLB terminate TLS bằng cert ACM (public), rồi re-encrypt tới Envoy.
+#   Cert ở đây chỉ dùng cho đoạn NLB -> Envoy, NLB KHÔNG verify cert target nên self-signed là đủ.
+# - Chế độ "nlb-tcp": NLB chỉ chuyển TCP, Envoy là điểm terminate TLS với user
+#   -> phải dùng cert thật (cert-manager/Let's Encrypt hoặc cert công ty), đặt tls.create=false.
+tls:
+  secretName: eg-gateway-tls
+  # true: chart tự sinh cert self-signed (giữ nguyên qua các lần upgrade nhờ lookup)
+  create: true
+  validityDays: 3650
+
+# ---------------------------------------------------------------- Data plane (Envoy Proxy)
+envoyProxy:
+  name: eg-demo-proxy
+  replicas: 2
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    cpuUtilization: 70
+  pdb:
+    minAvailable: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  # Drain kết nối khi Pod Envoy bị xoá (deploy/scale-in), khớp với deregistration delay của NLB/F5
+  shutdown:
+    drainTimeout: 30s
+    minDrainDuration: 5s
+  service:
+    # LoadBalancer: AWS Load Balancer Controller tạo NLB.
+    # Khi gắn F5 sau này: đổi sang NodePort (F5 -> NodePort) hoặc ClusterIP (F5 CIS -> Pod IP), nlb.enabled=false.
+    type: LoadBalancer
+    loadBalancerClass: service.k8s.aws/nlb
+    externalTrafficPolicy: Cluster
+    nlb:
+      enabled: true
+      scheme: internet-facing
+      # Có giá trị  -> chế độ "nlb-tls": NLB terminate TLS bằng cert ACM (public), re-encrypt tới Envoy.
+      # Để trống    -> chế độ "nlb-tcp": NLB chỉ chuyển TCP, Envoy terminate TLS bằng tls.secretName.
+      acmCertArn: ""
+      sslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      # Giữ IP thật của client (NLB là L4, không chèn X-Forwarded-For)
+      preserveClientIP: true
+      deregistrationDelaySeconds: 30
+      # Giới hạn IP được truy cập (khuyến nghị cho demo), ví dụ ["203.0.113.0/24"]
+      sourceRanges: []
+    # Annotation bổ sung (ghi đè/ thêm vào annotation do chart sinh)
+    annotations: {}
+  # Access log JSON ra stdout: có thêm user (sub) và partner id để truy vết
+  accessLog: true
+
+# ---------------------------------------------------------------- ClientTrafficPolicy (phía client -> Envoy)
+clientTraffic:
+  # direct : lấy IP từ kết nối TCP (NLB preserve_client_ip) - dùng khi CHƯA có F5
+  # xff    : lấy IP từ X-Forwarded-For do F5 chèn vào      - dùng khi CÓ F5 phía trước
+  clientIPDetection: direct
+  xffTrustedHops: 1
+  # Endpoint health check của listener (cho NLB/F5 monitor hoặc kiểm tra thủ công)
+  healthCheckPath: /healthz
+  requestReceivedTimeout: 30s
+  idleTimeout: 300s
+  # Xoá các header "nội bộ" mà client có thể giả mạo, TRƯỚC khi qua filter xác thực.
+  # Các header này sau đó do Envoy tự set từ JWT claim / API key.
+  stripRequestHeaders:
+    - x-jwt-sub
+    - x-jwt-client-id
+    - x-user-email
+    - x-partner-id

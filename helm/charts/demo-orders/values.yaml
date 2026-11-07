@@ -1,0 +1,86 @@
+# App 2 - Orders REST API (go-httpbin giả lập)  ->  https://api.<domain>/orders
+# Cài vào namespace "demo-orders":
+#   helm upgrade --install demo-orders helm/charts/demo-orders -n demo-orders -f helm/values/demo-orders.yaml
+#
+# Bản đồ endpoint (gateway -> backend go-httpbin):
+#   /orders/*          -> /anything/orders/*   echo lại request (method, header, body) - API chính
+#   /orders/unstable   -> /unstable            backend lỗi 500 ngẫu nhiên 50%   - demo RETRY
+#   /orders/slow       -> /delay/5             backend trả lời sau 5s           - demo TIMEOUT + CIRCUIT BREAKER
+#   /orders/chaos/*    -> /anything/chaos/*    gateway tự chèn lỗi/độ trễ       - demo FAULT INJECTION
+
+domain: demo.example.com
+hostPrefix: api
+
+gateway:
+  name: eg-gateway
+  namespace: eg-gateway
+  sectionName: https
+
+image:
+  repository: docker.io/mccutchen/go-httpbin
+  tag: 2.25.0
+  pullPolicy: IfNotPresent
+
+versions:
+  v1:
+    replicas: 2
+  v2:
+    replicas: 1
+
+canary:
+  v2Weight: 10
+  # Header chọn phiên bản API
+  header:
+    name: x-api-version
+    value: v2
+
+# --------------------------------------------------------------- AWS Cognito (JWT)
+cognito:
+  issuer: "https://cognito-idp.<REGION>.amazonaws.com/<USER_POOL_ID>"
+  # Scope của resource server "orders-api" (dùng cho client máy - Client Credentials)
+  scopes:
+    read: orders-api/read
+    write: orders-api/write
+
+# --------------------------------------------------------------- Phân quyền
+# User (access token có cognito:groups) hoặc máy (access token có scope)
+authz:
+  readGroups: ["viewer", "developer", "devops-admin"]
+  writeGroups: ["developer", "devops-admin"]
+  deleteGroups: ["devops-admin"]
+
+cors:
+  # Mặc định cho phép portal gọi API từ trình duyệt; thêm origin khác ở đây
+  extraAllowOrigins: []
+
+# --------------------------------------------------------------- Traffic
+rateLimit:
+  # Mỗi user/client (claim "sub") có bộ đếm riêng
+  requestsPerMinutePerSubject: 30
+
+resilience:
+  main:
+    requestTimeout: 10s
+  unstable:
+    numRetries: 3
+    perRetryTimeout: 1s
+    requestTimeout: 5s
+  slow:
+    requestTimeout: 2s
+    circuitBreaker:
+      maxConnections: 3
+      maxPendingRequests: 1
+      maxParallelRequests: 3
+
+chaos:
+  abortPercent: 50
+  abortStatus: 503
+  delayPercent: 20
+  delay: 500ms
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 32Mi
+  limits:
+    memory: 128Mi

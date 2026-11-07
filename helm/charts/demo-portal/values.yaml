@@ -1,0 +1,74 @@
+# App 1 - Web Portal (podinfo)  ->  https://portal.<domain>
+# Cài vào namespace "demo-portal":
+#   helm upgrade --install demo-portal helm/charts/demo-portal -n demo-portal -f helm/values/demo-portal.yaml
+
+domain: demo.example.com
+hostPrefix: portal
+
+gateway:
+  name: eg-gateway
+  namespace: eg-gateway
+  sectionName: https
+
+image:
+  repository: docker.io/stefanprodan/podinfo
+  tag: 6.15.0
+  pullPolicy: IfNotPresent
+
+# Hai phiên bản để demo canary. Màu + message hiển thị trên UI và trong JSON trả về.
+versions:
+  v1:
+    replicas: 2
+    message: "Portal v1 (stable)"
+    color: "#34577c"
+  v2:
+    replicas: 1
+    message: "Portal v2 (canary)"
+    color: "#e85d04"
+
+canary:
+  # % traffic vào v2
+  v2Weight: 20
+  # Header ép vào v2 (cho tester nội bộ)
+  header:
+    name: x-canary
+    value: always
+
+# --------------------------------------------------------------- AWS Cognito (OIDC)
+cognito:
+  # https://cognito-idp.<region>.amazonaws.com/<user_pool_id>
+  issuer: "https://cognito-idp.<REGION>.amazonaws.com/<USER_POOL_ID>"
+  # App client "portal-web" (Authorization Code, có secret)
+  clientId: "<PORTAL_CLIENT_ID>"
+  # Secret chứa key "client-secret" (tạo bằng kubectl, KHÔNG để trong Git)
+  clientSecretName: portal-oidc-client
+  scopes: ["openid", "email", "profile"]
+  # (Tuỳ chọn) Bỏ trống: Envoy Gateway tự lấy từ OIDC discovery của issuer.
+  # Có thể khai báo tường minh theo domain Hosted UI của Cognito:
+  #   https://<domain_prefix>.auth.<region>.amazoncognito.com/oauth2/authorize
+  #   https://<domain_prefix>.auth.<region>.amazoncognito.com/oauth2/token
+  authorizationEndpoint: ""
+  tokenEndpoint: ""
+
+# --------------------------------------------------------------- Phân quyền theo group Cognito
+authz:
+  # Thuộc 1 trong các group này mới vào được portal
+  allowedGroups: ["devops-admin", "developer", "viewer"]
+  # Các path chỉ group admin được vào (podinfo /env lộ biến môi trường -> nhạy cảm)
+  adminGroups: ["devops-admin"]
+  adminPaths: ["/env", "/configs"]
+
+# --------------------------------------------------------------- Traffic
+rateLimit:
+  # Global rate limit theo từng IP client
+  requestsPerMinutePerIP: 300
+resilience:
+  requestTimeout: 15s
+  retries: 2
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 32Mi
+  limits:
+    memory: 128Mi

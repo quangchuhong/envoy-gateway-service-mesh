@@ -1,0 +1,56 @@
+# App 3 - Partner API (go-httpbin giả lập)  ->  https://partner.<domain>/v1/*
+# Cài vào namespace "demo-partner":
+#   helm upgrade --install demo-partner helm/charts/demo-partner -n demo-partner -f helm/values/demo-partner.yaml \
+#     --set apiKeys.keys.partner-gold=$GOLD_KEY --set apiKeys.keys.partner-silver=$SILVER_KEY
+#
+#   /v1/*  -> /anything/v1/*   (httpbin echo lại request: dễ kiểm tra header gateway gắn vào)
+
+domain: demo.example.com
+hostPrefix: partner
+
+gateway:
+  name: eg-gateway
+  namespace: eg-gateway
+  sectionName: https
+
+image:
+  repository: docker.io/mccutchen/go-httpbin
+  tag: 2.25.0
+  pullPolicy: IfNotPresent
+
+replicas: 2
+
+# --------------------------------------------------------------- API key
+apiKeys:
+  secretName: partner-api-keys
+  # Header client gửi API key
+  header: x-api-key
+  # Header Envoy gắn vào request đi tiếp, chứa "client id" (tên key trong Secret)
+  clientIdHeader: x-partner-id
+  # client id -> API key. KHÔNG commit key thật: truyền bằng --set khi cài.
+  keys:
+    partner-gold: ""
+    partner-silver: ""
+
+# --------------------------------------------------------------- Gói dịch vụ của partner
+tiers:
+  - clientId: partner-gold
+    requestsPerMinute: 100
+    allowWrite: true
+  - clientId: partner-silver
+    requestsPerMinute: 5
+    allowWrite: false
+
+# IP được phép gọi API (allowlist). Demo để mở; production đặt IP NAT của từng partner.
+allowedCIDRs:
+  - 0.0.0.0/0
+
+resilience:
+  requestTimeout: 10s
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 32Mi
+  limits:
+    memory: 128Mi

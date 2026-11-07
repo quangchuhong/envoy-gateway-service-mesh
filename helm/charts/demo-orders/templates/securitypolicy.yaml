@@ -1,0 +1,111 @@
+{{- $c := .Values.cognito -}}
+{{- $a := .Values.authz -}}
+# Bảo mật cho toàn bộ Orders API (áp dụng cho cả 4 HTTPRoute):
+#
+#  CORS : cho phép portal (trình duyệt) gọi API. Preflight OPTIONS được trả lời trước bước JWT.
+#  JWT  : bắt buộc "Authorization: Bearer <access token Cognito>".
+#         Không đặt "audiences" vì access token của Cognito KHÔNG có claim "aud".
+#         claim -> header: sub -> x-jwt-sub (dùng cho rate limit theo user), client_id -> x-jwt-client-id
+#  AuthZ: xét theo thứ tự, luật đầu tiên khớp được áp dụng, không khớp -> 403
+#         - Chặn ID token (token_use = id): API chỉ nhận access token
+#         - Đọc  (GET/HEAD)          : group {{ join ", " $a.readGroups }}  HOẶC scope {{ $c.scopes.read }}
+#         - Ghi  (POST/PUT/PATCH)    : group {{ join ", " $a.writeGroups }} HOẶC scope {{ $c.scopes.write }}
+#         - Xoá  (DELETE)            : group {{ join ", " $a.deleteGroups }}
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: orders-api-auth
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    {{- range list "orders-api" "orders-unstable" "orders-slow" "orders-chaos" }}
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: {{ . }}
+    {{- end }}
+  cors:
+    allowOrigins:
+      - "https://portal.{{ .Values.domain }}"
+      {{- range .Values.cors.extraAllowOrigins }}
+      - {{ . | quote }}
+      {{- end }}
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    allowHeaders: ["authorization", "content-type", "{{ .Values.canary.header.name }}"]
+    exposeHeaders: ["x-backend-version", "x-ratelimit-limit", "x-ratelimit-remaining", "x-ratelimit-reset"]
+    maxAge: 600s
+  jwt:
+    providers:
+      - name: cognito
+        issuer: {{ $c.issuer | quote }}
+        remoteJWKS:
+          uri: "{{ $c.issuer }}/.well-known/jwks.json"
+        claimToHeaders:
+          - claim: sub
+            header: x-jwt-sub
+          - claim: client_id
+            header: x-jwt-client-id
+  authorization:
+    defaultAction: Deny
+    rules:
+      - name: reject-id-tokens
+        action: Deny
+        principal:
+          jwt:
+            provider: cognito
+            claims:
+              - name: token_use
+                values: ["id"]
+      - name: read-by-group
+        action: Allow
+        operation:
+          methods: ["GET", "HEAD"]
+        principal:
+          jwt:
+            provider: cognito
+            claims:
+              - name: "cognito:groups"
+                valueType: StringArray
+                values:
+                  {{- toYaml $a.readGroups | nindent 18 }}
+      - name: read-by-scope
+        action: Allow
+        operation:
+          methods: ["GET", "HEAD"]
+        principal:
+          jwt:
+            provider: cognito
+            scopes: [{{ $c.scopes.read | quote }}]
+      - name: write-by-group
+        action: Allow
+        operation:
+          methods: ["POST", "PUT", "PATCH"]
+        principal:
+          jwt:
+            provider: cognito
+            claims:
+              - name: "cognito:groups"
+                valueType: StringArray
+                values:
+                  {{- toYaml $a.writeGroups | nindent 18 }}
+      - name: write-by-scope
+        action: Allow
+        operation:
+          methods: ["POST", "PUT", "PATCH"]
+        principal:
+          jwt:
+            provider: cognito
+            scopes: [{{ $c.scopes.write | quote }}]
+      - name: delete-by-admin
+        action: Allow
+        operation:
+          methods: ["DELETE"]
+        principal:
+          jwt:
+            provider: cognito
+            claims:
+              - name: "cognito:groups"
+                valueType: StringArray
+                values:
+                  {{- toYaml $a.deleteGroups | nindent 18 }}
