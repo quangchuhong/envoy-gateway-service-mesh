@@ -2,7 +2,7 @@
 # eg-platform: phần hạ tầng dùng chung, do platform team quản lý.
 # Cài vào namespace "eg-gateway":
 #   helm upgrade --install eg-platform helm/charts/eg-platform -n eg-gateway --create-namespace \
-#     -f helm/values/eg-platform.yaml
+#     -f helm/values/generated/eg-platform.yaml
 # ---------------------------------------------------------------------------
 
 # Domain gốc của các app demo: portal.<domain>, api.<domain>, partner.<domain>

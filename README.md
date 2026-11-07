@@ -130,13 +130,16 @@ Tạo bản ghi DNS `*.<domain>` trỏ về NLB ([docs/04](docs/04-platform.md))
 | 09 | [Vận hành & xử lý sự cố](docs/09-operations-troubleshooting.md) | Log, egctl, metrics, lỗi thường gặp, gỡ cài |
 | 10 | [Bước tiếp theo: F5, Istio](docs/10-next-steps-f5-istio.md) | Gắn F5 phía trước, tích hợp Istio mesh |
 
-Giải thích chi tiết từng khối `values.yaml` và template của từng chart app:
+Giải thích chi tiết từng khối `values.yaml` và template của từng chart:
 
-| Chart | Tài liệu |
-|---|---|
-| `demo-portal` | [helm/charts/demo-portal/README.md](helm/charts/demo-portal/README.md) |
-| `demo-orders` | [helm/charts/demo-orders/README.md](helm/charts/demo-orders/README.md) |
-| `demo-partner` | [helm/charts/demo-partner/README.md](helm/charts/demo-partner/README.md) |
+| Phần | Chart / thư mục | Tài liệu |
+|---|---|---|
+| Control plane | `helm/envoy-gateway` (values cho chart chính thức `gateway-helm`) | [helm/envoy-gateway/README.md](helm/envoy-gateway/README.md) |
+| Rate limit backend | `eg-redis` | [helm/charts/eg-redis/README.md](helm/charts/eg-redis/README.md) |
+| Gateway + data plane | `eg-platform` | [helm/charts/eg-platform/README.md](helm/charts/eg-platform/README.md) |
+| App 1 | `demo-portal` | [helm/charts/demo-portal/README.md](helm/charts/demo-portal/README.md) |
+| App 2 | `demo-orders` | [helm/charts/demo-orders/README.md](helm/charts/demo-orders/README.md) |
+| App 3 | `demo-partner` | [helm/charts/demo-partner/README.md](helm/charts/demo-partner/README.md) |
 
 ## Phiên bản đã dùng
 
