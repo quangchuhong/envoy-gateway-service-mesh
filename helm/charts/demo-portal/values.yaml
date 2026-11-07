@@ -1,6 +1,6 @@
 # App 1 - Web Portal (podinfo)  ->  https://portal.<domain>
 # Cài vào namespace "demo-portal":
-#   helm upgrade --install demo-portal helm/charts/demo-portal -n demo-portal -f helm/values/demo-portal.yaml
+#   helm upgrade --install demo-portal helm/charts/demo-portal -n demo-portal -f helm/values/generated/demo-portal.yaml
 
 domain: demo.example.com
 hostPrefix: portal

@@ -1,6 +1,6 @@
 # App 3 - Partner API (go-httpbin giả lập)  ->  https://partner.<domain>/v1/*
 # Cài vào namespace "demo-partner":
-#   helm upgrade --install demo-partner helm/charts/demo-partner -n demo-partner -f helm/values/demo-partner.yaml \
+#   helm upgrade --install demo-partner helm/charts/demo-partner -n demo-partner -f helm/values/generated/demo-partner.yaml \
 #     --set apiKeys.keys.partner-gold=$GOLD_KEY --set apiKeys.keys.partner-silver=$SILVER_KEY
 #
 #   /v1/*  -> /anything/v1/*   (httpbin echo lại request: dễ kiểm tra header gateway gắn vào)

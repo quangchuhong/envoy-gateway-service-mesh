@@ -130,6 +130,14 @@ Tạo bản ghi DNS `*.<domain>` trỏ về NLB ([docs/04](docs/04-platform.md))
 | 09 | [Vận hành & xử lý sự cố](docs/09-operations-troubleshooting.md) | Log, egctl, metrics, lỗi thường gặp, gỡ cài |
 | 10 | [Bước tiếp theo: F5, Istio](docs/10-next-steps-f5-istio.md) | Gắn F5 phía trước, tích hợp Istio mesh |
 
+Giải thích chi tiết từng khối `values.yaml` và template của từng chart app:
+
+| Chart | Tài liệu |
+|---|---|
+| `demo-portal` | [helm/charts/demo-portal/README.md](helm/charts/demo-portal/README.md) |
+| `demo-orders` | [helm/charts/demo-orders/README.md](helm/charts/demo-orders/README.md) |
+| `demo-partner` | [helm/charts/demo-partner/README.md](helm/charts/demo-partner/README.md) |
+
 ## Phiên bản đã dùng
 
 | Thành phần | Phiên bản |

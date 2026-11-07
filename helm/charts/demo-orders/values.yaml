@@ -1,6 +1,6 @@
 # App 2 - Orders REST API (go-httpbin giả lập)  ->  https://api.<domain>/orders
 # Cài vào namespace "demo-orders":
-#   helm upgrade --install demo-orders helm/charts/demo-orders -n demo-orders -f helm/values/demo-orders.yaml
+#   helm upgrade --install demo-orders helm/charts/demo-orders -n demo-orders -f helm/values/generated/demo-orders.yaml
 #
 # Bản đồ endpoint (gateway -> backend go-httpbin):
 #   /orders/*          -> /anything/orders/*   echo lại request (method, header, body) - API chính
