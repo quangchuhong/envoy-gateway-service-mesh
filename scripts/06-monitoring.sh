@@ -23,18 +23,22 @@ GEN="$REPO_ROOT/helm/values/generated"
 ING_VALUES="$GEN/monitoring-ingress.yaml"
 STORAGE_VALUES="$GEN/monitoring-storage.yaml"
 
-# Annotation có hiệu lực ở cấp ALB/listener: mọi Ingress trong cùng group phải giống nhau (hoặc bỏ trống),
-# nên chép nguyên từ Ingress của GitLab để không xung đột.
-ALB_LEVEL_KEYS="scheme ip-address-type load-balancer-name security-groups manage-backend-security-group-rules subnets load-balancer-attributes ssl-policy wafv2-acl-arn waf-acl-id shield-advanced-protection tags inbound-cidrs listen-ports ssl-redirect customer-owned-ipv4-pool"
+# Annotation dùng chung cho CẢ group (ALB/listener): chỉ cần MỘT Ingress đặt, Ingress khác bỏ trống là được.
+# Nếu Grafana đặt mà lệch với bất kỳ Ingress nào trong group (jenkins, nexus, sonarqube...), controller báo
+# "conflicting ..." và ngừng cập nhật CẢ ALB. Vì vậy Grafana KHÔNG đặt các annotation này, chỉ in ra để đối chiếu.
+GROUP_KEYS="scheme ip-address-type load-balancer-name subnets security-groups manage-backend-security-group-rules customer-owned-ipv4-pool load-balancer-attributes tags wafv2-acl-arn waf-acl-id shield-advanced-protection ssl-redirect"
+# listen-ports là riêng từng Ingress: rule của Grafana chỉ gắn vào listener HTTPS 443 (không mở Grafana qua HTTP)
+GRAFANA_LISTEN_PORTS='[{"HTTPS":443}]'
 
 detect() {
   log "Tìm Ingress ALB của GitLab (namespace $GITLAB_NS)"
-  local all gl group
+  local all gl group members keys_json cert alb summary
   all=$(kubectl get ingress -A -o json)
-  # Ingress dùng ALB: ingressClassName=alb hoặc annotation kubernetes.io/ingress.class=alb
+  # Ingress dùng ALB: ingressClassName=alb hoặc annotation kubernetes.io/ingress.class=alb. Ưu tiên webservice.
   gl=$(echo "$all" | jq -c --arg ns "$GITLAB_NS" '[.items[]
         | select(.metadata.namespace==$ns)
-        | select(.spec.ingressClassName=="alb" or .metadata.annotations["kubernetes.io/ingress.class"]=="alb")][0] // empty')
+        | select(.spec.ingressClassName=="alb" or .metadata.annotations["kubernetes.io/ingress.class"]=="alb")]
+        | ((map(select(.metadata.name | test("webservice"))) + .)[0]) // empty')
   [[ -n "$gl" ]] || die "Không thấy Ingress ALB nào trong namespace $GITLAB_NS. Đặt GITLAB_INGRESS_NAMESPACE đúng namespace của GitLab."
   ok "Ingress GitLab: $(echo "$gl" | jq -r '.metadata.namespace + "/" + .metadata.name') hosts: $(echo "$gl" | jq -r '[.spec.rules[]?.host] | join(", ")')"
 
@@ -44,41 +48,56 @@ detect() {
        ALB chỉ dùng chung được giữa các Ingress cùng group. Xem docs/11-monitoring.md mục 'GitLab chưa dùng Ingress group'."
   fi
   ok "ALB group: $group"
-  echo "$all" | jq -r --arg g "$group" '.items[] | select(.metadata.annotations["alb.ingress.kubernetes.io/group.name"]==$g)
-     | "       - " + .metadata.namespace + "/" + .metadata.name + "  " + ([.spec.rules[]?.host] | join(","))'
-  local alb; alb=$(echo "$gl" | jq -r '.status.loadBalancer.ingress[0].hostname // empty')
+  members=$(echo "$all" | jq -c --arg g "$group" --arg mon "$MON_NS" '[.items[]
+     | select(.metadata.annotations["alb.ingress.kubernetes.io/group.name"]==$g) | select(.metadata.namespace != $mon)]')
+  echo "$members" | jq -r '.[] | "       - " + .metadata.namespace + "/" + .metadata.name + "  " + ([.spec.rules[]?.host] | join(","))
+     + "  ports=" + (.metadata.annotations["alb.ingress.kubernetes.io/listen-ports"] // "(mặc định)")'
+  alb=$(echo "$members" | jq -r '[.[] | .status.loadBalancer.ingress[0].hostname // empty][0] // empty')
   [[ -n "$alb" ]] && ok "ALB hiện tại: $alb"
 
-  # Chép annotation cấp ALB từ Ingress GitLab, thêm annotation riêng cho Grafana
-  local keys_json cert
-  keys_json=$(printf '%s\n' $ALB_LEVEL_KEYS | jq -R . | jq -s .)
-  cert="${ACM_CERT_ARN:-$(echo "$gl" | jq -r '.metadata.annotations["alb.ingress.kubernetes.io/certificate-arn"] // empty')}"
+  # Cấu hình cấp group hiện có (Grafana kế thừa, không đặt lại)
+  keys_json=$(printf '%s\n' $GROUP_KEYS | jq -R . | jq -s .)
+  summary=$(echo "$members" | jq -r --argjson keys "$keys_json" '$keys[] as $k
+     | ([.[] | .metadata.annotations["alb.ingress.kubernetes.io/" + $k] // empty] | unique) as $v
+     | select($v | length > 0)
+     | (if ($v | length) > 1 then "!! " else "   " end) + $k + ": " + ($v | join("   <>   "))')
+  log "Cấu hình cấp ALB của group (Grafana kế thừa, không đặt lại):"
+  echo "$summary" | sed 's/^/    /'
+  if echo "$summary" | grep -q '^!!'; then
+    warn "Group đang có annotation khác nhau giữa các Ingress (dòng '!!'). Đây là vấn đề có sẵn, không do Grafana gây ra:
+       kiểm tra: kubectl logs -n kube-system deploy/aws-load-balancer-controller | grep -i conflict"
+  fi
+  if ! echo "$summary" | grep -q 'ssl-redirect'; then
+    warn "Group không bật ssl-redirect: http://$GRAFANA_HOST sẽ không tự chuyển sang HTTPS, hãy dùng https://"
+  fi
+
+  cert="${ACM_CERT_ARN:-$(echo "$members" | jq -r '[.[] | .metadata.annotations["alb.ingress.kubernetes.io/certificate-arn"] // empty][0] // empty')}"
   mkdir -p "$GEN"
-  echo "$gl" | jq --argjson keys "$keys_json" --arg group "$group" --arg host "$GRAFANA_HOST" --arg cert "$cert" '
-    (.metadata.annotations // {}) as $a
-    | ([ $keys[] | "alb.ingress.kubernetes.io/" + . | select($a[.] != null) | {key: ., value: $a[.]} ] | from_entries) as $copied
-    | {
-        grafana: {
-          ingress: {
-            enabled: true,
-            ingressClassName: "alb",
-            annotations: ($copied + {
-              "alb.ingress.kubernetes.io/group.name": $group,
-              "alb.ingress.kubernetes.io/target-type": "ip",
-              "alb.ingress.kubernetes.io/healthcheck-path": "/api/health",
-              "alb.ingress.kubernetes.io/success-codes": "200"
-            } + (if $cert != "" then {"alb.ingress.kubernetes.io/certificate-arn": $cert} else {} end)),
-            hosts: [$host],
-            path: "/",
-            pathType: "Prefix"
-          },
-          "grafana.ini": { server: { root_url: ("https://" + $host) } }
-        }
-      }' > "$ING_VALUES"
+  jq -n --arg group "$group" --arg host "$GRAFANA_HOST" --arg cert "$cert" --arg ports "$GRAFANA_LISTEN_PORTS" '
+    {
+      grafana: {
+        ingress: {
+          enabled: true,
+          ingressClassName: "alb",
+          annotations: ({
+            "alb.ingress.kubernetes.io/group.name": $group,
+            "alb.ingress.kubernetes.io/listen-ports": $ports,
+            "alb.ingress.kubernetes.io/target-type": "ip",
+            "alb.ingress.kubernetes.io/backend-protocol": "HTTP",
+            "alb.ingress.kubernetes.io/healthcheck-path": "/api/health",
+            "alb.ingress.kubernetes.io/success-codes": "200"
+          } + (if $cert != "" then {"alb.ingress.kubernetes.io/certificate-arn": $cert} else {} end)),
+          hosts: [$host],
+          path: "/",
+          pathType: "Prefix"
+        },
+        "grafana.ini": { server: { root_url: ("https://" + $host) } }
+      }
+    }' > "$ING_VALUES"
   ok "Đã sinh $ING_VALUES (Grafana: https://$GRAFANA_HOST)"
   jq -r '.grafana.ingress.annotations | to_entries[] | "       " + .key + ": " + .value' "$ING_VALUES"
   if [[ -z "$cert" ]]; then
-    warn "Không có cert: ACM_CERT_ARN trống và Ingress GitLab không có certificate-arn. HTTPS cho $GRAFANA_HOST sẽ lỗi."
+    die "Không có cert: ACM_CERT_ARN trống và không Ingress nào trong group có certificate-arn."
   fi
 }
 
@@ -121,6 +140,11 @@ install() {
   done
   [[ -n "$alb" ]] || die "Ingress Grafana chưa có địa chỉ ALB. Xem: kubectl describe ingress -n $MON_NS monitoring-grafana"
   ok "Ingress Grafana gắn vào ALB: $alb"
+  local group_alb
+  group_alb=$(kubectl get ingress -n "$GITLAB_NS" -o json | jq -r '[.items[].status.loadBalancer.ingress[0].hostname // empty][0] // empty')
+  if [[ -n "$group_alb" && "$group_alb" != "$alb" ]]; then
+    warn "ALB của Grafana ($alb) KHÁC ALB của GitLab ($group_alb): Grafana đã tạo ALB riêng. Kiểm tra group.name."
+  fi
 
   dns
   password

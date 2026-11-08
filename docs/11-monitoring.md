@@ -25,7 +25,7 @@ Bản ghi cụ thể `grafana.<DOMAIN>` được Route 53 ưu tiên hơn wildcar
 |---|---|---|
 | kube-prometheus-stack `92.12.0` | `oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack` | Prometheus Operator, Prometheus, Grafana, node-exporter, kube-state-metrics |
 | Values chung | `helm/monitoring/kube-prometheus-stack-values.yaml` | Tắt Alertmanager và các target control plane EKS không scrape được |
-| Values Ingress (sinh tự động) | `helm/values/generated/monitoring-ingress.yaml` | Chép annotation cấp ALB từ Ingress GitLab (gitignored) |
+| Values Ingress (sinh tự động) | `helm/values/generated/monitoring-ingress.yaml` | `group.name` của GitLab + annotation riêng của Grafana (gitignored) |
 | Chart `eg-monitoring` | `helm/charts/eg-monitoring` | PodMonitor/ServiceMonitor + 5 dashboard Envoy Gateway, xem [README](../helm/charts/eg-monitoring/README.md) |
 | Script | `scripts/06-monitoring.sh` | `detect`, `install`, `dns`, `password` |
 
@@ -33,11 +33,12 @@ Bản ghi cụ thể `grafana.<DOMAIN>` được Route 53 ưu tiên hơn wildcar
 
 AWS Load Balancer Controller gom mọi Ingress có cùng annotation `alb.ingress.kubernetes.io/group.name` (ở bất kỳ namespace nào) vào **một** ALB. Mỗi Ingress đóng góp rule của mình (host + path → target group).
 
-Annotation chia làm hai loại:
+Annotation chia làm ba loại:
 
-- **Cấp ALB/listener** (`scheme`, `subnets`, `security-groups`, `listen-ports`, `ssl-policy`, `wafv2-acl-arn`, `load-balancer-attributes`, `tags`, `inbound-cidrs`, `ssl-redirect`, …): mọi Ingress trong group phải **giống nhau hoặc bỏ trống**. Nếu khác nhau, controller báo lỗi kiểu `conflicting ... settings` và **ngừng reconcile cả group** (ALB của GitLab không bị xoá nhưng không cập nhật nữa). Vì vậy `detect` chép nguyên các annotation này từ Ingress GitLab.
-- **Cấp rule/target group** (`target-type`, `healthcheck-path`, `success-codes`, …): riêng cho từng Ingress. Grafana dùng `target-type: ip`, health check `/api/health`.
-- `certificate-arn`: các cert của mọi Ingress trong group được gộp lên listener HTTPS (SNI). Script dùng `ACM_CERT_ARN` (cert `*.gitlabonlinecom.click`), nếu trống thì dùng cert của GitLab.
+- **Cấp ALB, dùng chung cả group** (`scheme`, `subnets`, `security-groups`, `ip-address-type`, `load-balancer-name`, `load-balancer-attributes`, `tags`, `wafv2-acl-arn`, `ssl-redirect`, …): chỉ cần **một** Ingress trong group đặt, các Ingress khác **bỏ trống** là được. Nếu hai Ingress đặt giá trị khác nhau, controller báo `conflicting ...` và **ngừng cập nhật cả ALB** (ALB không bị xoá, nhưng mọi thay đổi của GitLab, Jenkins, Nexus, SonarQube… đều bị treo). Vì vậy **Grafana không đặt** các annotation này mà kế thừa từ group; `detect` chỉ in ra để đối chiếu (dòng `!!` = group đang có giá trị lệch nhau từ trước).
+- **Riêng từng Ingress, theo listener** (`listen-ports`): mỗi Ingress chỉ gắn rule vào các cổng nó khai báo; listener của ALB là hợp của tất cả. Grafana khai báo `[{"HTTPS":443}]`: chỉ phục vụ qua HTTPS. `listen-ports` của các Ingress khác (vd `gitlab-kas` chỉ có HTTP 80) **không được chép** sang Grafana, nếu chép thì Grafana sẽ không có rule trên 443.
+- **Riêng từng Ingress, theo target group** (`target-type`, `backend-protocol`, `healthcheck-path`, `success-codes`, …): Grafana dùng `target-type: ip`, `backend-protocol: HTTP` (cổng 3000), health check `/api/health`. GitLab dùng `backend-protocol: HTTPS` cũng không sao.
+- `certificate-arn`: cert của mọi Ingress trên cùng cổng được gộp lên listener HTTPS (SNI). Script dùng `ACM_CERT_ARN` (cert `*.gitlabonlinecom.click`), nếu trống thì dùng cert đầu tiên tìm thấy trong group.
 
 > Không đặt `alb.ingress.kubernetes.io/group.order` cho Grafana: rule theo host không chồng lên rule của GitLab nên thứ tự không quan trọng.
 
@@ -71,25 +72,42 @@ Annotation chia làm hai loại:
 ./scripts/06-monitoring.sh detect
 ```
 
-Kết quả mong đợi:
+Kết quả mong đợi (ví dụ cụm hiện tại, group `alb-apps` dùng chung với Jenkins, Nexus, SonarQube):
 
 ```
-==> Tìm Ingress ALB của GitLab (namespace gitlab)
-[OK] Ingress GitLab: gitlab/gitlab-webservice-default hosts: gitlab.gitlabonlinecom.click
-[OK] ALB group: gitlab
-       - gitlab/gitlab-webservice-default  gitlab.gitlabonlinecom.click
-[OK] ALB hiện tại: k8s-gitlab-xxxx.ap-southeast-1.elb.amazonaws.com
-[OK] Đã sinh .../helm/values/generated/monitoring-ingress.yaml (Grafana: https://grafana.gitlabonlinecom.click)
-       alb.ingress.kubernetes.io/scheme: internet-facing
-       alb.ingress.kubernetes.io/listen-ports: [{"HTTP":80},{"HTTPS":443}]
+[INFO] Tìm Ingress ALB của GitLab (namespace gitlab)
+[ OK ] Ingress GitLab: gitlab/gitlab-webservice-default hosts: gitlab.gitlabonlinecom.click
+[ OK ] ALB group: alb-apps
+       - gitlab/gitlab-kas  kas.gitlabonlinecom.click  ports=[{"HTTP":80}]
+       - gitlab/gitlab-webservice-default  gitlab.gitlabonlinecom.click  ports=...
+       - jenkins/jenkins  jenkins.gitlabonlinecom.click  ports=...
        ...
+[ OK ] ALB hiện tại: k8s-albapps-....ap-southeast-1.elb.amazonaws.com
+[INFO] Cấu hình cấp ALB của group (Grafana kế thừa, không đặt lại):
+       scheme: internet-facing
+       subnets: subnet-01e7b81b2c34fbaae, subnet-0729b4d3570c85035, subnet-063d005e791e4932f
+       load-balancer-attributes: idle_timeout.timeout_seconds=600
+       tags: Environment=prod,Application=gitlab-alb
+[ OK ] Đã sinh .../helm/values/generated/monitoring-ingress.yaml (Grafana: https://grafana.gitlabonlinecom.click)
+       alb.ingress.kubernetes.io/group.name: alb-apps
+       alb.ingress.kubernetes.io/listen-ports: [{"HTTPS":443}]
+       alb.ingress.kubernetes.io/target-type: ip
+       alb.ingress.kubernetes.io/backend-protocol: HTTP
+       alb.ingress.kubernetes.io/healthcheck-path: /api/health
+       alb.ingress.kubernetes.io/success-codes: 200
+       alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-southeast-1:609320954321:certificate/569f...
 ```
 
-Đọc kỹ danh sách annotation: các annotation cấp ALB phải trùng với Ingress GitLab. So sánh nhanh:
+Kiểm tra:
 
-```bash
-kubectl get ingress -n gitlab <tên-ingress-gitlab> -o jsonpath='{.metadata.annotations}' | jq
-```
+- Annotation sinh cho Grafana **chỉ** gồm các key trên (không có `scheme`, `subnets`, `tags`…).
+- Không có dòng `!!`. Nếu có, group đang lệch cấu hình từ trước; xem log controller trước khi cài:
+
+  ```bash
+  kubectl logs -n kube-system deploy/aws-load-balancer-controller --since=1h | grep -iE "conflict|error"
+  ```
+
+- Cảnh báo "không bật ssl-redirect" chỉ có nghĩa `http://grafana...` không tự chuyển sang HTTPS; dùng `https://`.
 
 ### 4.2. Install
 
@@ -255,7 +273,8 @@ kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
 | Ingress Grafana không có ADDRESS | Controller lỗi reconcile group | `kubectl describe ingress -n monitoring monitoring-grafana` và `kubectl logs -n kube-system deploy/aws-load-balancer-controller \| grep -i error` |
-| Event `conflicting ...` / `failed build model` | Annotation cấp ALB khác Ingress GitLab | So sánh annotation (mục 4.1), sửa values sinh ra rồi `install` lại. Cả group ngừng cập nhật tới khi sửa xong |
+| Event `conflicting ...` / `failed build model` | Hai Ingress trong group đặt annotation cấp ALB khác nhau (dòng `!!` ở `detect`) | Sửa cho các Ingress đó giống nhau hoặc bỏ trống trên một bên. Cả group ngừng cập nhật tới khi sửa xong |
+| `https://grafana...` trả về trang GitLab hoặc 404 | Rule Grafana không có trên listener 443 | `listen-ports` của Grafana phải có `HTTPS:443`; `aws elbv2 describe-rules` trên listener 443 phải có rule host `grafana.*` |
 | Grafana ADDRESS khác GitLab | Sai `group.name` | Kiểm tra `ALB_GROUP_NAME` để trống hoặc trùng group GitLab |
 | `https://grafana...` lỗi cert | Cert listener không phủ host | Kiểm tra `ACM_CERT_ARN`, `aws elbv2 describe-listener-certificates` |
 | 502/504 từ ALB | Target group unhealthy | `aws elbv2 describe-target-health`; Security group của node/Pod phải cho ALB SG vào cổng 3000 (controller tự thêm nếu `manage-backend-security-group-rules` không tắt) |
