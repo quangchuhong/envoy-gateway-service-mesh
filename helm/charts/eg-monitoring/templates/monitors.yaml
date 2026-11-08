@@ -1,0 +1,67 @@
+{{- $ns := .Values.envoyGatewayNamespace -}}
+{{- if .Values.monitors.envoyProxy }}
+# Pod Envoy Proxy do Envoy Gateway tạo (label từ EnvoyAppLabel() trong mã nguồn v1.9.3)
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: envoy-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: eg-monitoring
+spec:
+  namespaceSelector:
+    matchNames: [{{ $ns }}]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: envoy
+      app.kubernetes.io/component: proxy
+      app.kubernetes.io/managed-by: envoy-gateway
+  podMetricsEndpoints:
+    - port: metrics
+      path: /stats/prometheus
+      interval: {{ .Values.scrapeInterval }}
+{{- end }}
+{{- if .Values.monitors.controlPlane }}
+---
+# Control plane envoy-gateway (Service có label control-plane=envoy-gateway, cổng "metrics")
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: envoy-gateway-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: eg-monitoring
+spec:
+  namespaceSelector:
+    matchNames: [{{ $ns }}]
+  selector:
+    matchLabels:
+      control-plane: envoy-gateway
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.scrapeInterval }}
+{{- end }}
+{{- if .Values.monitors.rateLimit }}
+---
+# Rate limit service (Deployment envoy-ratelimit do Envoy Gateway tạo)
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: envoy-ratelimit
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: eg-monitoring
+spec:
+  namespaceSelector:
+    matchNames: [{{ $ns }}]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: envoy-ratelimit
+      app.kubernetes.io/component: ratelimit
+      app.kubernetes.io/managed-by: envoy-gateway
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.scrapeInterval }}
+{{- end }}

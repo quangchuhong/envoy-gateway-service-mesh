@@ -1,0 +1,22 @@
+# eg-monitoring: dạy Prometheus (kube-prometheus-stack) thu thập metrics của Envoy Gateway
+# và nạp dashboard Grafana. Cài vào namespace "monitoring" SAU kube-prometheus-stack:
+#   helm upgrade --install eg-monitoring helm/charts/eg-monitoring -n monitoring
+
+# Namespace chứa control plane Envoy Gateway VÀ các Pod Envoy Proxy
+# (chế độ mặc định ControllerNamespace của Envoy Gateway tạo Pod Envoy ở đây)
+envoyGatewayNamespace: envoy-gateway-system
+
+scrapeInterval: 30s
+
+monitors:
+  # Pod Envoy Proxy (data plane): cổng "metrics" 19001, /stats/prometheus
+  envoyProxy: true
+  # Control plane envoy-gateway: Service cổng "metrics" 19001, /metrics
+  controlPlane: true
+  # Rate limit service: cổng "metrics" 19001, /metrics
+  rateLimit: true
+
+dashboards:
+  enabled: true
+  # Thư mục trong Grafana (cần grafana.sidecar.dashboards.folderAnnotation=grafana_folder)
+  folder: Envoy Gateway

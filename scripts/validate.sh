@@ -10,7 +10,7 @@ CHARTS="$REPO_ROOT/helm/charts"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
 log "helm lint"
-for c in eg-redis eg-platform demo-portal demo-orders; do helm lint "$CHARTS/$c" >/dev/null && ok "lint $c"; done
+for c in eg-redis eg-platform demo-portal demo-orders eg-monitoring; do helm lint "$CHARTS/$c" >/dev/null && ok "lint $c"; done
 helm lint "$CHARTS/demo-partner" --set apiKeys.keys.partner-gold=x --set apiKeys.keys.partner-silver=y >/dev/null && ok "lint demo-partner"
 
 log "helm template"

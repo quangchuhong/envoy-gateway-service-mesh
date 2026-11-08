@@ -105,6 +105,8 @@ kubectl port-forward -n envoy-gateway-system "$(kubectl get pod -n envoy-gateway
 curl -s localhost:19001/stats/prometheus | grep -E "envoy_http_downstream_rq_xx|ratelimit|jwt_authn|rbac" | head -30
 ```
 
+Cài Prometheus + Grafana để thu thập và xem dashboard liên tục: [docs/11-monitoring.md](11-monitoring.md).
+
 Metric hữu ích: `envoy_cluster_upstream_rq_retry` (số lần retry), `envoy_cluster_upstream_rq_pending_overflow` (circuit breaker), `envoy_http_jwt_authn_denied`, `envoy_http_rbac_denied`, `envoy_cluster_ratelimit_over_limit`.
 
 ## 5. Lỗi thường gặp

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Gỡ demo (theo thứ tự ngược lại):
+#   scripts/99-cleanup.sh --monitoring  # Prometheus/Grafana + bản ghi grafana.<DOMAIN> (ALB GitLab giữ nguyên)
 #   scripts/99-cleanup.sh --dns         # xoá bản ghi Route 53 *.<DOMAIN> do scripts/05-dns.sh tạo
 #   scripts/99-cleanup.sh --apps        # 3 app demo + namespace
 #   scripts/99-cleanup.sh --platform    # Gateway (xoá NLB), EnvoyProxy, GatewayClass
@@ -23,6 +24,27 @@ clean_dns() {
   aws route53 change-resource-record-sets --hosted-zone-id "$zone" \
     --change-batch "$(jq -n --argjson rr "$rr" '{Changes:[{Action:"DELETE",ResourceRecordSet:$rr}]}')" >/dev/null
   ok "Đã xoá bản ghi *.${DOMAIN} trong hosted zone $zone"
+}
+clean_monitoring() {
+  local ns="${MON_NAMESPACE:-monitoring}" host="${GRAFANA_HOST:-grafana.${DOMAIN}}" zone="${HOSTED_ZONE_ID:-}" rr
+  if [[ -z "$zone" ]]; then
+    zone=$(aws route53 list-hosted-zones-by-name --dns-name "${DOMAIN}." \
+      --query "HostedZones[?Name=='${DOMAIN}.' && Config.PrivateZone==\`false\`].Id | [0]" --output text | sed 's|/hostedzone/||')
+  fi
+  if [[ -n "$zone" && "$zone" != "None" ]]; then
+    rr=$(aws route53 list-resource-record-sets --hosted-zone-id "$zone" --output json \
+      | jq -c --arg n "${host}." '[.ResourceRecordSets[] | select(.Type=="A" and .Name==$n)][0] // empty')
+    if [[ -n "$rr" ]]; then
+      aws route53 change-resource-record-sets --hosted-zone-id "$zone" \
+        --change-batch "$(jq -n --argjson rr "$rr" '{Changes:[{Action:"DELETE",ResourceRecordSet:$rr}]}')" >/dev/null
+      ok "Đã xoá bản ghi $host"
+    fi
+  fi
+  # Xoá Ingress Grafana trước: AWS LB Controller chỉ gỡ rule của Grafana, ALB của GitLab giữ nguyên
+  helm uninstall eg-monitoring -n "$ns" 2>/dev/null || true
+  helm uninstall monitoring -n "$ns" 2>/dev/null || true
+  kubectl delete namespace "$ns" --ignore-not-found
+  ok "Đã gỡ monitoring. CRD monitoring.coreos.com giữ lại (xem docs/11 mục Gỡ cài)"
 }
 clean_apps() {
   for r in demo-portal demo-orders demo-partner; do helm uninstall "$r" -n "$r" 2>/dev/null || true; done
@@ -49,11 +71,12 @@ clean_cognito() {
 }
 
 case "${1:-}" in
+  --monitoring) clean_monitoring ;;
   --dns) clean_dns ;;
   --apps) clean_apps ;;
   --platform) clean_platform ;;
   --eg) clean_eg ;;
   --cognito) clean_cognito ;;
-  --all) clean_dns; clean_apps; clean_platform; clean_eg; clean_cognito ;;
-  *) sed -n '2,8p' "$0"; exit 1 ;;
+  --all) clean_monitoring; clean_dns; clean_apps; clean_platform; clean_eg; clean_cognito ;;
+  *) sed -n '2,9p' "$0"; exit 1 ;;
 esac

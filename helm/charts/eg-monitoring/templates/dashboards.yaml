@@ -1,0 +1,24 @@
+{{- if .Values.dashboards.enabled }}
+{{- /*
+  Mỗi file trong dashboards/ thành một ConfigMap có label grafana_dashboard=1.
+  Sidecar của Grafana (kube-prometheus-stack) tự nạp mọi ConfigMap có label này, ở mọi namespace.
+  Nguồn: chart gateway-addons-helm của Envoy Gateway v1.9.3 (đã thay uid datasource gắn cứng bằng $datasource).
+*/ -}}
+{{- range $path, $_ := .Files.Glob "dashboards/*.json" }}
+{{- $name := base $path | trimSuffix ".json" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eg-dashboard-{{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: eg-monitoring
+  annotations:
+    grafana_folder: {{ $.Values.dashboards.folder | quote }}
+data:
+  {{ $name }}.json: |-
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
+{{- end }}

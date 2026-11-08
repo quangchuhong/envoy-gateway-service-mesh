@@ -1,0 +1,98 @@
+# Values cho chart kube-prometheus-stack (Prometheus Operator + Prometheus + Grafana)
+#
+#   helm upgrade --install monitoring oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
+#     --version 92.12.0 -n monitoring --create-namespace \
+#     -f helm/monitoring/kube-prometheus-stack-values.yaml \
+#     -f helm/values/generated/monitoring-ingress.yaml        # sinh bởi scripts/06-monitoring.sh
+#
+# Mọi khoá ở đây đã đối chiếu với values.yaml của kube-prometheus-stack 92.12.0 và grafana chart 14.0.1.
+
+# Không cài Alertmanager (chỉ cần Prometheus + Grafana); bật lại khi cần gửi cảnh báo
+alertmanager:
+  enabled: false
+
+# EKS không mở metrics của control plane (controller-manager, scheduler, etcd) cho người dùng,
+# kube-proxy chỉ nghe 127.0.0.1 -> tắt để không có target "down" và cảnh báo giả
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+defaultRules:
+  rules:
+    etcd: false
+    kubeControllerManager: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeProxy: false
+
+prometheus:
+  prometheusSpec:
+    # Đọc MỌI ServiceMonitor/PodMonitor/PrometheusRule trong cụm, không chỉ cái có label của release này
+    # (để nhận PodMonitor/ServiceMonitor của chart eg-monitoring và các app khác)
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    scrapeConfigSelectorNilUsesHelmValues: false
+    retention: 7d
+    retentionSize: 8GB
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        memory: 2Gi
+    # Mặc định dữ liệu nằm trong emptyDir (mất khi Pod Prometheus khởi động lại).
+    # Muốn lưu bền: scripts/06-monitoring.sh thêm storageSpec khi đặt PROM_STORAGE_CLASS (cần EBS CSI driver).
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+grafana:
+  enabled: true
+  # Mật khẩu admin lấy từ Secret do scripts/06-monitoring.sh tạo (không để mật khẩu trong Git)
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  # Dashboard Kubernetes mặc định của kube-prometheus-stack
+  defaultDashboardsEnabled: true
+  defaultDashboardsTimezone: Asia/Ho_Chi_Minh
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+      # ConfigMap có annotation grafana_folder sẽ được xếp vào thư mục cùng tên (vd "Envoy Gateway")
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  grafana.ini:
+    users:
+      allow_sign_up: false
+    auth.anonymous:
+      enabled: false
+    analytics:
+      check_for_updates: false
+      reporting_enabled: false
+  # Ingress (host, ALB group, cert...) nằm trong helm/values/generated/monitoring-ingress.yaml
+  ingress:
+    enabled: false

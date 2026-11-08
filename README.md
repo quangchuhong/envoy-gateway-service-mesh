@@ -55,21 +55,24 @@ Dùng chung cho cả 3 app (ở mức Gateway): redirect HTTP→HTTPS, TLS, heal
 .
 ├── README.md
 ├── config/demo.env.example        # Biến môi trường (domain, region, ACM cert, Cognito prefix)
-├── docs/                          # Tài liệu từng bước (đọc theo thứ tự 00 → 10)
+├── docs/                          # Tài liệu từng bước (đọc theo thứ tự 00 → 11)
 ├── helm/
 │   ├── envoy-gateway/values.yaml  # Values cho chart chính thức gateway-helm (bật Global Rate Limit)
+│   ├── monitoring/                # Values kube-prometheus-stack (Prometheus + Grafana)
 │   └── charts/
 │       ├── eg-redis/              # Redis cho rate limit
 │       ├── eg-platform/           # GatewayClass, EnvoyProxy, Gateway, ClientTrafficPolicy, TLS
 │       ├── demo-portal/           # App 1
 │       ├── demo-orders/           # App 2
-│       └── demo-partner/          # App 3
+│       ├── demo-partner/          # App 3
+│       └── eg-monitoring/         # PodMonitor/ServiceMonitor + dashboard Grafana Envoy Gateway
 ├── scripts/
 │   ├── 01-check-prereqs.sh        # Kiểm tra công cụ, cụm, LB Controller
 │   ├── 02-cognito-setup.sh        # Tạo Cognito bằng AWS CLI
 │   ├── 03-gen-values.sh           # Sinh values từ config/*.env
 │   ├── 04-deploy.sh               # helm upgrade --install theo thứ tự
 │   ├── 05-dns.sh                  # Route 53: *.gitlabonlinecom.click → NLB của Gateway
+│   ├── 06-monitoring.sh           # Prometheus + Grafana (Grafana dùng chung ALB GitLab)
 │   ├── get-token.sh               # Lấy token Cognito (user / máy) để test
 │   ├── render-all.sh              # helm template ra rendered/*.yaml
 │   ├── validate.sh                # helm lint + kiểm tra schema CRD
@@ -135,6 +138,12 @@ Tạo bản ghi DNS wildcard `*.gitlabonlinecom.click` trỏ về NLB:
 ./tests/run-tests.sh
 ```
 
+Tuỳ chọn: Prometheus + Grafana (Grafana dùng chung ALB của GitLab, xem docs/11):
+
+```bash
+./scripts/06-monitoring.sh install
+```
+
 ## Tài liệu
 
 | # | Tài liệu | Nội dung |
@@ -150,6 +159,7 @@ Tạo bản ghi DNS wildcard `*.gitlabonlinecom.click` trỏ về NLB:
 | 08 | [Test case](docs/08-testing.md) | Danh sách test, cách chạy, test bằng trình duyệt |
 | 09 | [Vận hành & xử lý sự cố](docs/09-operations-troubleshooting.md) | Log, egctl, metrics, lỗi thường gặp, gỡ cài |
 | 10 | [Bước tiếp theo: F5, Istio](docs/10-next-steps-f5-istio.md) | Gắn F5 phía trước, tích hợp Istio mesh |
+| 11 | [Monitoring](docs/11-monitoring.md) | Prometheus + Grafana, Grafana dùng chung ALB của GitLab |
 
 Giải thích chi tiết từng khối `values.yaml` và template của từng chart:
 
@@ -161,6 +171,7 @@ Giải thích chi tiết từng khối `values.yaml` và template của từng c
 | App 1 | `demo-portal` | [helm/charts/demo-portal/README.md](helm/charts/demo-portal/README.md) |
 | App 2 | `demo-orders` | [helm/charts/demo-orders/README.md](helm/charts/demo-orders/README.md) |
 | App 3 | `demo-partner` | [helm/charts/demo-partner/README.md](helm/charts/demo-partner/README.md) |
+| Monitoring | `eg-monitoring` | [helm/charts/eg-monitoring/README.md](helm/charts/eg-monitoring/README.md) |
 
 ## Phiên bản đã dùng
 
@@ -172,3 +183,4 @@ Giải thích chi tiết từng khối `values.yaml` và template của từng c
 | podinfo (App 1) | 6.15.0 |
 | go-httpbin (App 2, 3) | 2.25.0 |
 | Redis (rate limit) | 7.4-alpine |
+| kube-prometheus-stack (monitoring, tuỳ chọn) | 92.12.0 |
