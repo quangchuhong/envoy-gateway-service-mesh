@@ -48,6 +48,14 @@ Lọc request lỗi:
 kubectl logs -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -c envoy --tail=500 | grep '^{' | jq -c 'select(.response_code >= 400) | {authority, path, response_code, response_flags, user_sub, partner_id, client_ip}'
 ```
 
+> Có **nhiều Pod Envoy** (mặc định 2) và NLB chia request cho từng Pod. `kubectl logs -l ...` in log của từng Pod **nối tiếp nhau**, nên đừng dùng `tail -n` để tìm "request vừa gọi": dòng đó có thể nằm trong log của Pod in trước. Hãy lọc bằng `jq` như trên, hoặc lọc theo path và mã lỗi cụ thể:
+>
+> ```bash
+> kubectl logs -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -c envoy --tail=1000 | grep '^{' | jq -c 'select(.path=="/orders/1" and .response_code==503) | {start_time, response_code, response_flags, upstream_host, upstream_cluster}'
+> ```
+>
+> Thêm `--prefix` vào `kubectl logs` để biết dòng log thuộc Pod nào (khi đó bỏ `grep '^{'` và tách phần prefix trước khi đưa vào `jq`).
+
 Ý nghĩa `response_flags` thường gặp:
 
 | Flag | Ý nghĩa |
@@ -57,7 +65,8 @@ kubectl logs -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-nam
 | `UT` | Hết timeout tới backend (504) |
 | `FI` / `DI` | Fault injection: abort / delay |
 | `UH` | Không có backend khoẻ |
-| `UF` | Không kết nối được backend |
+| `UF` | Không kết nối được backend (kể cả khi bắt tay TLS thất bại do `BackendTLSPolicy`: sai CA hoặc sai hostname trong cert) |
+| `URX` | Đã hết số lần retry (thường đi kèm `UF`) |
 | `NR` | Không có route khớp (404) |
 
 ## 3. Xem cấu hình Envoy thực tế bằng `egctl`
