@@ -54,7 +54,9 @@ Hoặc chạy cả hai bằng:
 kubectl get pods -n envoy-gateway-system
 ```
 
-Kết quả mong đợi: `envoy-gateway-xxx` (2 Pod), `envoy-ratelimit-xxx`, `redis-xxx` đều `Running`, và job `eg-gateway-helm-certgen` ở trạng thái `Completed`.
+Kết quả mong đợi: `envoy-gateway-xxx` (2 Pod), `envoy-ratelimit-xxx`, `redis-xxx` đều `Running`.
+
+Job `eg-gateway-helm-certgen` là Helm hook (`pre-install`, `pre-upgrade`) và có `ttlSecondsAfterFinished: 30`, nên Kubernetes **tự xoá job 30 giây sau khi chạy xong**. Không thấy job trong `kubectl get job` là bình thường. Bằng chứng job đã chạy thành công là các Secret nó tạo ra (kiểm tra bên dưới).
 
 ```bash
 kubectl get crd | grep -E "gateway.networking.k8s.io|gateway.envoyproxy.io"

@@ -233,7 +233,9 @@ helm template eg oci://docker.io/envoyproxy/gateway-helm --version v1.9.3 -n env
 kubectl get deploy,pod,job -n envoy-gateway-system
 ```
 
-Kết quả mong đợi: `envoy-gateway` 2/2, `envoy-ratelimit` sẵn sàng, `redis` sẵn sàng, job `eg-gateway-helm-certgen` `Complete`.
+Kết quả mong đợi: `envoy-gateway` 2/2, `envoy-ratelimit` sẵn sàng, `redis` sẵn sàng.
+
+Job `eg-gateway-helm-certgen` là Helm hook (`pre-install`, `pre-upgrade`) và có `ttlSecondsAfterFinished: 30`, nên Kubernetes **tự xoá job 30 giây sau khi chạy xong**. Không thấy job trong `kubectl get job` là bình thường. Bằng chứng job đã chạy thành công là các Secret nó tạo ra (kiểm tra bên dưới).
 
 Cấu hình controller thực tế đang dùng:
 
@@ -284,6 +286,6 @@ kubectl logs -n envoy-gateway-system deploy/envoy-gateway --tail=50
 | GatewayClass mãi không `Accepted` | `controllerName` trong values khác `GatewayClass.spec.controllerName` | Đồng bộ hai giá trị |
 | `BackendTrafficPolicy` có rate limit `Global` báo lỗi | Thiếu khối `config.envoyGateway.rateLimit` | Thêm khối `rateLimit` và `helm upgrade` |
 | Không có Deployment `envoy-ratelimit` | Như trên | Như trên |
-| `SecurityPolicy` OIDC báo `HMAC secret not found` | Job `certgen` lỗi hoặc bị xoá Secret | `kubectl logs job/eg-gateway-helm-certgen -n envoy-gateway-system`; cài lại chart |
+| `SecurityPolicy` OIDC báo `HMAC secret not found` | Job `certgen` lỗi, hoặc Secret bị xoá | Chạy lại `helm upgrade eg ...` (job là hook `pre-upgrade` nên sẽ chạy lại và tạo Secret). Muốn xem log của job, chạy `kubectl logs -n envoy-gateway-system job/eg-gateway-helm-certgen -f` **ngay** trong lúc upgrade, vì job bị xoá sau 30 giây |
 | Đổi `config` nhưng không có tác dụng | Controller chưa khởi động lại | `kubectl rollout restart deploy/envoy-gateway -n envoy-gateway-system` |
 | Không kéo được image (cluster không ra Internet) | Image nằm trên Docker Hub | Mirror sang ECR và đặt `global.imageRegistry` |

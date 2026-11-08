@@ -111,7 +111,7 @@ Metric hữu ích: `envoy_cluster_upstream_rq_retry` (số lần retry), `envoy_
 | HTTPRoute `NotAllowedByListeners` | Namespace thiếu label `gateway.demo.io/attach=true` | `kubectl label namespace <ns> gateway.demo.io/attach=true` |
 | HTTPRoute `ResolvedRefs=False` | Sai tên/port Service trong `backendRefs` | Kiểm tra Service trong cùng namespace |
 | `SecurityPolicy` báo `client secret not found` | Secret `portal-oidc-client` thiếu hoặc sai key (phải là `client-secret`) | Tạo lại Secret theo docs/05 |
-| `SecurityPolicy` báo `HMAC secret not found` | Job `certgen` chưa chạy | `kubectl get job -n envoy-gateway-system`; cài lại chart Envoy Gateway |
+| `SecurityPolicy` báo `HMAC secret not found` | Job `certgen` lỗi, hoặc Secret `envoy-oidc-hmac` bị xoá | Chạy lại `./scripts/04-deploy.sh eg`: `helm upgrade` kích hoạt lại job (hook `pre-upgrade`). Job tự xoá 30 giây sau khi xong nên `kubectl get job` thường không thấy |
 | Portal: Cognito báo `redirect_mismatch` | Callback URL trong Cognito khác `https://portal.gitlabonlinecom.click/oauth2/callback` | Sửa callback của client `portal-web` |
 | Portal: đăng nhập xong bị `401`/vòng lặp redirect | Cookie không được lưu (truy cập bằng HTTP, sai domain), đồng hồ lệch | Luôn dùng HTTPS; kiểm tra cookie trong DevTools |
 | Portal: đăng nhập xong `403 RBAC: access denied` | User chưa thuộc group nào | `admin-add-user-to-group`, đăng nhập lại |
