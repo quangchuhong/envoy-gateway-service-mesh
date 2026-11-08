@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Gỡ demo (theo thứ tự ngược lại):
+#   scripts/99-cleanup.sh --dns         # xoá bản ghi Route 53 *.<DOMAIN> do scripts/05-dns.sh tạo
 #   scripts/99-cleanup.sh --apps        # 3 app demo + namespace
 #   scripts/99-cleanup.sh --platform    # Gateway (xoá NLB), EnvoyProxy, GatewayClass
 #   scripts/99-cleanup.sh --eg          # Envoy Gateway + Redis (CRD giữ lại, xem docs/09)
@@ -8,6 +9,21 @@
 source "$(dirname "$0")/lib.sh"
 load_env
 
+clean_dns() {
+  local zone="${HOSTED_ZONE_ID:-}" rr
+  if [[ -z "$zone" ]]; then
+    zone=$(aws route53 list-hosted-zones-by-name --dns-name "${DOMAIN}." \
+      --query "HostedZones[?Name=='${DOMAIN}.' && Config.PrivateZone==\`false\`].Id | [0]" --output text | sed 's|/hostedzone/||')
+  fi
+  [[ -n "$zone" && "$zone" != "None" ]] || { warn "Không tìm thấy hosted zone ${DOMAIN}"; return; }
+  # Route 53 lưu ký tự "*" dưới dạng "\052"
+  rr=$(aws route53 list-resource-record-sets --hosted-zone-id "$zone" --output json \
+    | jq -c --arg d "${DOMAIN}." '[.ResourceRecordSets[] | select(.Type=="A" and (.Name=="\\052."+$d or .Name=="*."+$d))][0] // empty')
+  [[ -n "$rr" ]] || { warn "Không có bản ghi *.${DOMAIN}"; return; }
+  aws route53 change-resource-record-sets --hosted-zone-id "$zone" \
+    --change-batch "$(jq -n --argjson rr "$rr" '{Changes:[{Action:"DELETE",ResourceRecordSet:$rr}]}')" >/dev/null
+  ok "Đã xoá bản ghi *.${DOMAIN} trong hosted zone $zone"
+}
 clean_apps() {
   for r in demo-portal demo-orders demo-partner; do helm uninstall "$r" -n "$r" 2>/dev/null || true; done
   kubectl delete namespace demo-portal demo-orders demo-partner --ignore-not-found
@@ -33,10 +49,11 @@ clean_cognito() {
 }
 
 case "${1:-}" in
+  --dns) clean_dns ;;
   --apps) clean_apps ;;
   --platform) clean_platform ;;
   --eg) clean_eg ;;
   --cognito) clean_cognito ;;
-  --all) clean_apps; clean_platform; clean_eg; clean_cognito ;;
-  *) sed -n '2,7p' "$0"; exit 1 ;;
+  --all) clean_dns; clean_apps; clean_platform; clean_eg; clean_cognito ;;
+  *) sed -n '2,8p' "$0"; exit 1 ;;
 esac

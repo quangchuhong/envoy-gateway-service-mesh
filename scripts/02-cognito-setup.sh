@@ -34,6 +34,10 @@ POOL_ID=$(aws cognito-idp create-user-pool $R \
   --account-recovery-setting 'RecoveryMechanisms=[{Priority=1,Name=verified_email}]' \
   --query UserPool.Id --output text)
 ok "User Pool: $POOL_ID"
+# Ghi ngay ID pool: nếu các bước sau lỗi, scripts/99-cleanup.sh --cognito vẫn xoá được pool này.
+# File sẽ được ghi đầy đủ ở cuối script.
+{ echo "# Đang tạo dở bởi scripts/02-cognito-setup.sh"; echo "export COGNITO_USER_POOL_ID=$POOL_ID"; } > "$OUT"
+chmod 600 "$OUT"
 
 # Demo: MFA OPTIONAL để script test lấy được token bằng mật khẩu.
 # Production: đặt --mfa-configuration ON (bắt buộc MFA).

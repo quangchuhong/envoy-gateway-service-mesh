@@ -4,7 +4,7 @@ Tài liệu này giải thích **từng khối trong `values.yaml`**: giá trị
 
 | | |
 |---|---|
-| URL | `https://portal.<domain>` |
+| URL | `https://portal.gitlabonlinecom.click` |
 | Namespace | `demo-portal` |
 | Ứng dụng | [podinfo](https://github.com/stefanprodan/podinfo) 6.15.0, chạy 2 phiên bản `v1` và `v2` |
 | Xác thực | Đăng nhập **OIDC** (Authorization Code) với **AWS Cognito**, thực hiện tại Envoy Gateway |
@@ -34,7 +34,7 @@ Resource được tạo ra khi cài chart:
 |---|---|---|---|
 | `workload.yaml` | `Deployment` | `portal-v1`, `portal-v2` | Chạy podinfo, mỗi phiên bản một Deployment |
 | `workload.yaml` | `Service` | `portal-v1`, `portal-v2` | Đích để HTTPRoute trỏ tới (port 9898) |
-| `httproute.yaml` | `HTTPRoute` | `portal` | Gắn vào Gateway, định tuyến `portal.<domain>` |
+| `httproute.yaml` | `HTTPRoute` | `portal` | Gắn vào Gateway, định tuyến `portal.gitlabonlinecom.click` |
 | `securitypolicy.yaml` | `SecurityPolicy` | `portal-auth` | Đăng nhập, kiểm tra token, phân quyền |
 | `backendtrafficpolicy.yaml` | `BackendTrafficPolicy` | `portal-traffic` | Hành vi Envoy khi gọi vào backend |
 
@@ -43,7 +43,7 @@ Resource được tạo ra khi cài chart:
 ```
 Trình duyệt ──► Envoy Gateway (Gateway eg-gateway, listener https)
    │
-   ├─ HTTPRoute "portal" khớp hostname portal.<domain>
+   ├─ HTTPRoute "portal" khớp hostname portal.gitlabonlinecom.click
    │
    ├─ SecurityPolicy "portal-auth"
    │    ① oauth2 : chưa có cookie hợp lệ → 302 sang Cognito Hosted UI
@@ -315,12 +315,12 @@ oidc:
 
 | Khoá values / trường | Ý nghĩa |
 |---|---|
-| `cognito.issuer` | Định danh User Pool: `https://cognito-idp.<region>.amazonaws.com/<pool_id>`. Envoy Gateway đọc `<issuer>/.well-known/openid-configuration` để biết các endpoint. **Không** có dấu `/` ở cuối |
+| `cognito.issuer` | Định danh User Pool: `https://cognito-idp.ap-southeast-1.amazonaws.com/<pool_id>`. Envoy Gateway đọc `<issuer>/.well-known/openid-configuration` để biết các endpoint. **Không** có dấu `/` ở cuối |
 | `cognito.clientId` | Client ID của app client `portal-web` |
 | `cognito.clientSecretName` | Tên **Secret Kubernetes** (không phải chính secret). Secret phải có key đúng tên `client-secret`. Tạo bằng `kubectl create secret generic portal-oidc-client -n demo-portal --from-literal=client-secret=...` |
 | `cognito.scopes` | `openid` bắt buộc để nhận ID token; `email`, `profile` để token có email |
-| `cognito.authorizationEndpoint`, `tokenEndpoint` | Tuỳ chọn. Để trống thì lấy từ discovery. Script điền sẵn theo domain Hosted UI: `https://<prefix>.auth.<region>.amazoncognito.com/oauth2/authorize` và `.../oauth2/token` |
-| `logoutPath: /logout` | Truy cập `https://portal.<domain>/logout` để Envoy xoá cookie phiên |
+| `cognito.authorizationEndpoint`, `tokenEndpoint` | Tuỳ chọn. Để trống thì lấy từ discovery. Script điền sẵn theo domain Hosted UI: `https://gitlabonlinecom-eg-demo.auth.ap-southeast-1.amazoncognito.com/oauth2/authorize` và `.../oauth2/token` |
+| `logoutPath: /logout` | Truy cập `https://portal.gitlabonlinecom.click/logout` để Envoy xoá cookie phiên |
 | `refreshToken: true` | Token hết hạn (30 phút) thì Envoy tự dùng refresh token xin token mới, user không phải đăng nhập lại |
 | `cookieNames` | Đặt tên cố định cho cookie chứa ID token và access token. Tên `PortalIdToken` được dùng lại ở khối `jwt` bên dưới |
 | `cookieConfig.sameSite: Lax` | Cookie vẫn được gửi khi Cognito redirect về (điều hướng top-level), nhưng không gửi theo request cross-site khác |
@@ -357,7 +357,7 @@ jwt:
 | `audiences` | Kiểm tra claim `aud`. ID token của Cognito có `aud` = client id, nên chỉ chấp nhận token cấp cho `portal-web` |
 | `remoteJWKS.uri` | Envoy tải và cache bộ public key của User Pool. Pod Envoy cần ra được Internet |
 | `extractFrom.cookies` | Đọc token từ cookie thay vì header `Authorization` |
-| `claimToHeaders` | Gắn `email`, `sub` thành header gửi vào podinfo. App biết ai đang dùng mà không cần tự giải mã token. Mở `https://portal.<domain>/headers` để xem |
+| `claimToHeaders` | Gắn `email`, `sub` thành header gửi vào podinfo. App biết ai đang dùng mà không cần tự giải mã token. Mở `https://portal.gitlabonlinecom.click/headers` để xem |
 
 > Client không giả mạo được `x-user-email`, `x-jwt-sub`: `ClientTrafficPolicy` của chart `eg-platform` xoá các header này ngay khi request vào, trước khi Envoy tự gắn lại từ token.
 

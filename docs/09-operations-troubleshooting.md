@@ -103,12 +103,16 @@ Metric hữu ích: `envoy_cluster_upstream_rq_retry` (số lần retry), `envoy_
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
 | Gateway không có `ADDRESS`, `PROGRAMMED=False` | AWS Load Balancer Controller chưa cài, subnet thiếu tag, IAM thiếu quyền | `kubectl logs -n kube-system deploy/aws-load-balancer-controller`; `kubectl describe svc -n eg-gateway` |
+| Gateway không có `ADDRESS`, log của AWS Load Balancer Controller báo lỗi certificate | ARN cert sai, hoặc cert khác account/region với cụm | Chạy `scripts/01-check-prereqs.sh` (kiểm tra account `609320954321`, region `ap-southeast-1`, trạng thái `ISSUED`) |
+| `curl` báo `SSL certificate problem` / trình duyệt cảnh báo cert | NLB đang ở chế độ `nlb-tcp`, Envoy trả cert self-signed | Kiểm tra listener 443 của NLB là `TLS` với cert ACM (docs/04 mục 4); `acmCertArn` trong `helm/values/generated/eg-platform.yaml` phải có giá trị |
+| Trình duyệt báo cert **hết hạn** | Cert mua ngoài import vào ACM không tự gia hạn | Import cert mới vào **cùng ARN**: `aws acm import-certificate --certificate-arn <ARN> --certificate fileb://cert.pem --private-key fileb://key.pem --certificate-chain fileb://chain.pem`. NLB tự dùng cert mới |
+| `Could not resolve host portal.gitlabonlinecom.click` | Chưa tạo bản ghi DNS, hoặc NLB bị tạo mới nên bản ghi trỏ vào NLB cũ | Chạy lại `scripts/05-dns.sh` |
 | NLB có rồi nhưng target unhealthy | Security Group của node/Pod chặn cổng 10443/10080 từ NLB | AWS Load Balancer Controller tự thêm rule; kiểm tra lại nếu dùng SG tự quản lý hoặc Security Groups for Pods |
 | HTTPRoute `NotAllowedByListeners` | Namespace thiếu label `gateway.demo.io/attach=true` | `kubectl label namespace <ns> gateway.demo.io/attach=true` |
 | HTTPRoute `ResolvedRefs=False` | Sai tên/port Service trong `backendRefs` | Kiểm tra Service trong cùng namespace |
 | `SecurityPolicy` báo `client secret not found` | Secret `portal-oidc-client` thiếu hoặc sai key (phải là `client-secret`) | Tạo lại Secret theo docs/05 |
 | `SecurityPolicy` báo `HMAC secret not found` | Job `certgen` chưa chạy | `kubectl get job -n envoy-gateway-system`; cài lại chart Envoy Gateway |
-| Portal: Cognito báo `redirect_mismatch` | Callback URL trong Cognito khác `https://portal.<domain>/oauth2/callback` | Sửa callback của client `portal-web` |
+| Portal: Cognito báo `redirect_mismatch` | Callback URL trong Cognito khác `https://portal.gitlabonlinecom.click/oauth2/callback` | Sửa callback của client `portal-web` |
 | Portal: đăng nhập xong bị `401`/vòng lặp redirect | Cookie không được lưu (truy cập bằng HTTP, sai domain), đồng hồ lệch | Luôn dùng HTTPS; kiểm tra cookie trong DevTools |
 | Portal: đăng nhập xong `403 RBAC: access denied` | User chưa thuộc group nào | `admin-add-user-to-group`, đăng nhập lại |
 | API `401` với token đúng | Envoy không tải được JWKS (không ra Internet), issuer sai (thừa `/` cuối) | So issuer với `curl $COGNITO_ISSUER/.well-known/openid-configuration` |
@@ -119,6 +123,10 @@ Metric hữu ích: `envoy_cluster_upstream_rq_retry` (số lần retry), `envoy_
 ## 6. Gỡ cài đặt
 
 Theo thứ tự ngược với lúc cài:
+
+```bash
+./scripts/99-cleanup.sh --dns
+```
 
 ```bash
 ./scripts/99-cleanup.sh --apps
@@ -136,7 +144,9 @@ Theo thứ tự ngược với lúc cài:
 ./scripts/99-cleanup.sh --cognito
 ```
 
-Xoá bản ghi DNS `*.<DOMAIN>` trong Route 53 bằng tay. CRD **không** bị Helm xoá. Nếu chắc chắn không còn dùng Gateway API trên cụm:
+Hoặc gỡ tất cả một lần: `./scripts/99-cleanup.sh --all`.
+
+`--dns` xoá bản ghi `*.gitlabonlinecom.click` mà `05-dns.sh` đã tạo. Cert trong ACM **không** bị xoá (cert được mua và import riêng, dùng lại được cho lần triển khai sau). CRD **không** bị Helm xoá. Nếu chắc chắn không còn dùng Gateway API trên cụm:
 
 ```bash
 kubectl get crd -o name | grep -E "gateway.envoyproxy.io|gateway.networking.k8s.io|gateway.networking.x-k8s.io" | xargs kubectl delete

@@ -4,7 +4,7 @@ Tài liệu này giải thích **từng khối trong `values.yaml`**: giá trị
 
 | | |
 |---|---|
-| URL | `https://api.<domain>/orders` |
+| URL | `https://api.gitlabonlinecom.click/orders` |
 | Namespace | `demo-orders` |
 | Ứng dụng | [go-httpbin](https://github.com/mccutchen/go-httpbin) 2.25.0 đóng vai API, 2 phiên bản `v1` và `v2` |
 | Xác thực | `Authorization: Bearer <access token>` do **AWS Cognito** cấp, cho cả **người dùng** và **máy** (Client Credentials) |
@@ -48,7 +48,7 @@ Resource được tạo:
 | `/orders/slow` | `/delay/5` | `orders-slow` | `orders-slow-traffic` | **Timeout**, **circuit breaker** (backend chậm 5s) |
 | `/orders/chaos/*` | `/anything/chaos/*` | `orders-chaos` | `orders-chaos-traffic` | **Fault injection** |
 
-Bốn route cùng hostname `api.<domain>` nhưng không đè nhau, vì Gateway API chọn route theo thứ tự ưu tiên: path `Exact` > `PathPrefix` dài hơn > `PathPrefix` ngắn hơn. `/orders/slow` (Exact) và `/orders/chaos` (prefix dài) luôn thắng `/orders`.
+Bốn route cùng hostname `api.gitlabonlinecom.click` nhưng không đè nhau, vì Gateway API chọn route theo thứ tự ưu tiên: path `Exact` > `PathPrefix` dài hơn > `PathPrefix` ngắn hơn. `/orders/slow` (Exact) và `/orders/chaos` (prefix dài) luôn thắng `/orders`.
 
 ## 2. Luồng request
 
@@ -56,7 +56,7 @@ Bốn route cùng hostname `api.<domain>` nhưng không đè nhau, vì Gateway A
 Client ── Authorization: Bearer <access token> ──► Envoy Gateway
    │
    ├─ SecurityPolicy "orders-api-auth"
-   │    ① cors : OPTIONS preflight từ https://portal.<domain> → trả lời ngay, chưa cần token
+   │    ① cors : OPTIONS preflight từ https://portal.gitlabonlinecom.click → trả lời ngay, chưa cần token
    │    ② jwt  : verify token (JWKS Cognito, issuer) → gắn x-jwt-sub, x-jwt-client-id
    │    ③ rbac : chặn ID token; xét group / scope theo method → Allow / 403
    │

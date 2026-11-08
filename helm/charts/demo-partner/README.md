@@ -4,7 +4,7 @@ Tài liệu này giải thích **từng khối trong `values.yaml`**: giá trị
 
 | | |
 |---|---|
-| URL | `https://partner.<domain>/v1/*` |
+| URL | `https://partner.gitlabonlinecom.click/v1/*` |
 | Namespace | `demo-partner` |
 | Ứng dụng | [go-httpbin](https://github.com/mccutchen/go-httpbin) 2.25.0 đóng vai API cho đối tác |
 | Xác thực | **API key** trong header `x-api-key` (không dùng Cognito: đối tác là hệ thống bên ngoài, không phải người dùng đăng nhập) |

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| URL | `https://partner.<domain>/v1/*` |
+| URL | `https://partner.gitlabonlinecom.click/v1/*` |
 | Namespace | `demo-partner` |
 | Backend | go-httpbin 2.25.0, 2 Pod |
 | Chart | `helm/charts/demo-partner` |

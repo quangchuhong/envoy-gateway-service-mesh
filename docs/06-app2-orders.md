@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| URL | `https://api.<domain>/orders` |
+| URL | `https://api.gitlabonlinecom.click/orders` |
 | Namespace | `demo-orders` |
 | Backend | go-httpbin 2.25.0 giả lập API, 2 phiên bản: `orders-api-v1` (2 Pod), `orders-api-v2` (1 Pod) |
 | Chart | `helm/charts/demo-orders` |
@@ -24,7 +24,7 @@ Tách thành 4 HTTPRoute vì mỗi route chỉ nên gắn một `BackendTrafficP
 
 | Bước | Cấu hình |
 |---|---|
-| CORS | Cho phép origin `https://portal.<domain>`, method GET/POST/PUT/PATCH/DELETE/OPTIONS, header `authorization`, `content-type`, `x-api-version`; expose `x-backend-version`, `x-ratelimit-*`; cache preflight 600s |
+| CORS | Cho phép origin `https://portal.gitlabonlinecom.click`, method GET/POST/PUT/PATCH/DELETE/OPTIONS, header `authorization`, `content-type`, `x-api-version`; expose `x-backend-version`, `x-ratelimit-*`; cache preflight 600s |
 | JWT | `Authorization: Bearer <token>`, issuer Cognito, JWKS từ `<issuer>/.well-known/jwks.json`. **Không** kiểm tra `aud` vì access token Cognito không có claim này |
 | Claim → header | `sub` → `x-jwt-sub`, `client_id` → `x-jwt-client-id` |
 

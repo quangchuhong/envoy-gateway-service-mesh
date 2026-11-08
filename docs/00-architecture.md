@@ -4,6 +4,24 @@
 
 F5 chưa được đặt vào. **AWS NLB** đứng ở vị trí của F5: nhận HTTPS từ Internet, terminate TLS bằng cert public trong ACM, rồi **re-encrypt** tới Envoy. Cách đi traffic này giống với mô hình F5 sau này, nên khi gắn F5 chỉ cần đổi vài giá trị (xem [docs/10](10-next-steps-f5-istio.md)).
 
+Môi trường triển khai:
+
+| Mục | Giá trị |
+|---|---|
+| AWS account / region | `609320954321` / `ap-southeast-1` |
+| Domain | `gitlabonlinecom.click`, DNS wildcard `*.gitlabonlinecom.click` (Route 53) trỏ về NLB |
+| Cert public | Cert `*.gitlabonlinecom.click` đã mua và import vào ACM: `arn:aws:acm:ap-southeast-1:609320954321:certificate/569f4470-6ac3-4ef2-be6e-7eb012397305` |
+| App 1 – Portal | `https://portal.gitlabonlinecom.click` |
+| App 2 – Orders API | `https://api.gitlabonlinecom.click/orders` |
+| App 3 – Partner API | `https://partner.gitlabonlinecom.click/v1` |
+| Cognito Hosted UI | `https://gitlabonlinecom-eg-demo.auth.ap-southeast-1.amazoncognito.com` |
+
+Ba app dùng **chung một NLB và một cert wildcard**. Envoy phân biệt app theo header `Host`.
+
+```
+ Route 53: *.gitlabonlinecom.click ──Alias──► NLB
+```
+
 ```
                                    ┌──────────────── AWS Cognito ─────────────────┐
                                    │ User Pool  : user, group (cognito:groups)    │
@@ -92,7 +110,7 @@ Hệ quả cần nắm:
 
 ```
 Browser ─GET https://portal/──► Envoy
-  oauth2: chưa có cookie hợp lệ ──► 302 https://<prefix>.auth.<region>.amazoncognito.com/oauth2/authorize
+  oauth2: chưa có cookie hợp lệ ──► 302 https://gitlabonlinecom-eg-demo.auth.ap-southeast-1.amazoncognito.com/oauth2/authorize
                                      ?client_id=<portal-web>&redirect_uri=https://portal/oauth2/callback&...
 Browser ─► Cognito Hosted UI: nhập email + mật khẩu (+ TOTP nếu bật)
 Cognito ─302─► https://portal/oauth2/callback?code=...&state=...
@@ -110,7 +128,7 @@ Request tiếp theo (có cookie):
 
 ```
 Client ─Authorization: Bearer <access token Cognito>─► Envoy
-  cors     : trả lời preflight cho origin https://portal.<domain>
+  cors     : trả lời preflight cho origin https://portal.gitlabonlinecom.click
   jwt_authn: verify chữ ký + issuer (không kiểm tra aud vì access token Cognito không có aud)
              gắn x-jwt-sub (sub), x-jwt-client-id (client_id)
   rbac     : token_use=id → 403 | GET/HEAD: group viewer/developer/devops-admin hoặc scope orders-api/read

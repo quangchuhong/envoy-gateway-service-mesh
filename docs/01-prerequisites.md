@@ -17,15 +17,27 @@
 cp config/demo.env.example config/demo.env
 ```
 
-Sửa các biến trong `config/demo.env`:
+File mẫu đã điền sẵn giá trị của môi trường hiện tại. Chỉ cần kiểm tra lại, đặc biệt là `EKS_CLUSTER_NAME`:
 
-| Biến | Ý nghĩa |
-|---|---|
-| `AWS_REGION`, `EKS_CLUSTER_NAME` | Region và tên cụm EKS hiện tại |
-| `DOMAIN` | Domain cho demo, 3 app sẽ là `portal.`, `api.`, `partner.` + `DOMAIN` |
-| `HOSTED_ZONE_ID` | Hosted zone Route 53 chứa `DOMAIN` |
-| `ACM_CERT_ARN` | Cert ACM **cùng region**, nên là wildcard `*.DOMAIN` (ví dụ `*.gitlabonlinecom.click`) |
-| `COGNITO_DOMAIN_PREFIX` | Prefix cho Hosted UI, phải duy nhất trong region |
+| Biến | Giá trị trong file mẫu | Ý nghĩa |
+|---|---|---|
+| `AWS_REGION` | `ap-southeast-1` | Region của cụm EKS, cert ACM và Cognito |
+| `EKS_CLUSTER_NAME` | `devops-tools` | **Sửa thành tên cụm EKS thật của bạn** |
+| `DOMAIN` | `gitlabonlinecom.click` | 3 app sẽ là `portal.`, `api.`, `partner.gitlabonlinecom.click` |
+| `HOSTED_ZONE_ID` | để trống | Hosted zone Route 53 của `DOMAIN`. Để trống thì `scripts/05-dns.sh` tự tìm public hosted zone theo tên domain |
+| `ACM_CERT_ARN` | `arn:aws:acm:ap-southeast-1:609320954321:certificate/569f4470-6ac3-4ef2-be6e-7eb012397305` | Cert `*.gitlabonlinecom.click` đã import vào ACM. Để trống thì chuyển sang chế độ `nlb-tcp` (Envoy dùng cert self-signed) |
+| `COGNITO_DOMAIN_PREFIX` | `gitlabonlinecom-eg-demo` | Prefix Hosted UI: `https://gitlabonlinecom-eg-demo.auth.ap-southeast-1.amazoncognito.com`. Phải duy nhất trong region; nếu bị trùng thì đổi tên khác |
+| `COGNITO_POOL_NAME` | `eg-demo-users` | Tên User Pool |
+| `EG_VERSION` | `v1.9.3` | Phiên bản Envoy Gateway |
+| `GATEWAY_IP`, `INSECURE_TLS` | trống, `0` | Chỉ dùng khi chạy test (xem docs/08) |
+
+AWS CLI phải dùng credentials của account **609320954321** (account chứa cert ACM và cụm EKS):
+
+```bash
+aws sts get-caller-identity --query Account --output text
+```
+
+Kết quả mong đợi: `609320954321`.
 
 Trỏ `kubectl` vào cụm:
 
@@ -96,8 +108,8 @@ Thêm bản ghi CNAME xác thực mà ACM yêu cầu vào Route 53, chờ trạn
 
 | Thành phần | Cần gọi tới | Để làm gì |
 |---|---|---|
-| Pod `envoy-gateway` (control plane) | `cognito-idp.<region>.amazonaws.com` | Đọc OIDC discovery |
-| Pod Envoy Proxy (`eg-gateway`) | `cognito-idp.<region>.amazonaws.com`, `<prefix>.auth.<region>.amazoncognito.com` | Tải JWKS, đổi code lấy token, refresh token |
+| Pod `envoy-gateway` (control plane) | `cognito-idp.ap-southeast-1.amazonaws.com` | Đọc OIDC discovery |
+| Pod Envoy Proxy (`eg-gateway`) | `cognito-idp.ap-southeast-1.amazonaws.com`, `gitlabonlinecom-eg-demo.auth.ap-southeast-1.amazoncognito.com` | Tải JWKS, đổi code lấy token, refresh token |
 
 Node ở private subnet cần **NAT Gateway** (hoặc egress tương đương) cho các kết nối trên.
 
@@ -117,4 +129,27 @@ Node ở private subnet cần **NAT Gateway** (hoặc egress tương đương) c
 ./scripts/01-check-prereqs.sh
 ```
 
-Script kiểm tra công cụ, AWS credentials, kết nối cụm, AWS Load Balancer Controller, CRD Gateway API có sẵn hay không, và trạng thái cert ACM.
+| Hạng mục | Script kiểm tra | Khi lỗi |
+|---|---|---|
+| Công cụ | `aws`, `kubectl`, `helm`, `jq`, `curl`, `openssl` có sẵn | Dừng |
+| AWS credentials | `aws sts get-caller-identity` chạy được | Dừng |
+| Kết nối cụm | `kubectl cluster-info` chạy được | Dừng, gợi ý lệnh `update-kubeconfig` |
+| AWS Load Balancer Controller | Có Deployment `aws-load-balancer-controller` | Cảnh báo |
+| CRD Gateway API | Đã có sẵn trên cụm hay chưa (tránh xung đột phiên bản) | Cảnh báo |
+| Cert ACM – region | Region trong ARN = `AWS_REGION` | Dừng |
+| Cert ACM – account | Account trong ARN = account đang dùng | Dừng |
+| Cert ACM – trạng thái | `ISSUED`; in ra ngày hết hạn | Dừng |
+| Cert ACM – tên miền | Cert phủ `portal.`, `api.`, `partner.gitlabonlinecom.click` | Dừng |
+
+Kết quả mong đợi với môi trường hiện tại (rút gọn):
+
+```
+[ OK ] Cert cùng region ap-southeast-1
+[ OK ] Cert cùng account 609320954321
+[ OK ] Cert trạng thái ISSUED
+[ OK ] Tên trong cert: *.gitlabonlinecom.click ...
+[ OK ] Cert phủ portal.gitlabonlinecom.click
+[ OK ] Cert phủ api.gitlabonlinecom.click
+[ OK ] Cert phủ partner.gitlabonlinecom.click
+[ OK ] Hoàn tất kiểm tra
+```

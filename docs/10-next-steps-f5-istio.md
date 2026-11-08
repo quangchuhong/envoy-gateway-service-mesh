@@ -37,7 +37,7 @@ Không cần sửa chart của 3 app: route, xác thực, phân quyền, rate li
 | Thành phần BIG-IP | Cấu hình |
 |---|---|
 | Virtual Server | `VIP:443` (kèm `VIP:80` redirect sang HTTPS) |
-| Client SSL profile | Cert public `*.<domain>`, TLS ≥ 1.2 |
+| Client SSL profile | Cert public `*.gitlabonlinecom.click` (chính cert đã mua, import file cert + private key + chain vào F5), TLS ≥ 1.2 |
 | Advanced WAF policy | Chạy **Transparent** 1–2 tuần để tinh chỉnh false positive, rồi chuyển **Blocking** |
 | HTTP profile | Bật **Insert X-Forwarded-For**; tăng *Max Header Size* (cookie OIDC và JWT khá lớn) |
 | Server SSL profile | Re-encrypt tới Envoy (không cần verify cert). Listener của Envoy không đặt `hostname` nên **không cần SNI** |
@@ -46,7 +46,16 @@ Không cần sửa chart của 3 app: route, xác thực, phân quyền, rate li
 | Timeout | Idle timeout của F5 ≥ timeout dài nhất của Envoy/backend |
 | Slow ramp + drain | Slow ramp cho Pod mới; thời gian rút member khỏi pool ≤ `envoyProxy.shutdown.drainTimeout` (30s) |
 
-### 1.3 Phân chia trách nhiệm để tránh trùng lặp
+### 1.3 Cert khi chuyển sang F5
+
+Hiện tại cert `*.gitlabonlinecom.click` nằm trong ACM (`arn:aws:acm:ap-southeast-1:609320954321:certificate/569f4470-6ac3-4ef2-be6e-7eb012397305`) và chỉ NLB dùng được. ACM **không cho xuất private key** của cert, kể cả cert đã import, nên F5 không lấy cert từ ACM được.
+
+- Dùng **bộ file gốc** (cert, private key, chain) mà bạn nhận khi mua cert để import vào F5 (*System → Certificate Management → SSL Certificate List*), rồi gắn vào Client SSL profile.
+- Khi gia hạn cert: cập nhật cả trên F5 và (nếu vẫn giữ NLB song song) import lại vào ACM cùng ARN.
+- Đoạn F5 → Envoy vẫn dùng cert self-signed `eg-gateway-tls` của chart như hiện nay.
+- Khi đã chuyển hẳn sang F5 (`nlb.enabled: false`), bỏ `acmCertArn` khỏi values; NLB không còn được tạo.
+
+### 1.4 Phân chia trách nhiệm để tránh trùng lặp
 
 | Việc | F5 | Envoy Gateway |
 |---|---|---|

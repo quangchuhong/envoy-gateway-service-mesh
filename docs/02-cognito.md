@@ -7,10 +7,10 @@ Cognito là nơi **duy nhất** quản lý người dùng, group và các ứng 
 | Loại | Tên | Dùng cho |
 |---|---|---|
 | User Pool | `eg-demo-users` | Kho user, đăng nhập bằng email, chỉ admin tạo user |
-| Hosted UI domain | `https://<prefix>.auth.<region>.amazoncognito.com` | Trang đăng nhập (OIDC) |
+| Hosted UI domain | `https://gitlabonlinecom-eg-demo.auth.ap-southeast-1.amazoncognito.com` | Trang đăng nhập (OIDC) |
 | Group | `devops-admin`, `developer`, `viewer` | Xuất hiện trong claim `cognito:groups` của token user |
 | Resource server | `orders-api` với scope `read`, `write` | Scope `orders-api/read`, `orders-api/write` cho client máy |
-| App client | `portal-web` | App 1: Authorization Code + client secret, callback `https://portal.<domain>/oauth2/callback` |
+| App client | `portal-web` | App 1: Authorization Code + client secret, callback `https://portal.gitlabonlinecom.click/oauth2/callback`, sign-out URL `https://portal.gitlabonlinecom.click/` |
 | App client | `demo-cli` | **Chỉ để test**: lấy token user bằng `USER_PASSWORD_AUTH` |
 | App client | `orders-m2m` | Client máy gọi App 2 bằng Client Credentials |
 | User | `eg-demo-admin@example.com` | group `devops-admin` |
@@ -25,6 +25,28 @@ Cognito là nơi **duy nhất** quản lý người dùng, group và các ứng 
 ```
 
 Kết quả được ghi vào `config/cognito.env` (quyền 600, đã `.gitignore`): User Pool ID, issuer, các client ID và secret, email và mật khẩu của 4 user test, cùng 2 API key cho App 3.
+
+Script lấy domain từ `DOMAIN=gitlabonlinecom.click` trong `config/demo.env` để khai báo callback cho `portal-web`. Nếu sau này đổi domain, phải sửa cả Callback URL và Sign-out URL của app client `portal-web`, không chỉ values của chart.
+
+Kiểm tra sau khi chạy:
+
+```bash
+source config/demo.env && source config/cognito.env
+```
+
+```bash
+curl -s "$COGNITO_ISSUER/.well-known/openid-configuration" | jq '{issuer, authorization_endpoint, token_endpoint, jwks_uri}'
+```
+
+Kết quả mong đợi: `authorization_endpoint` là `https://gitlabonlinecom-eg-demo.auth.ap-southeast-1.amazoncognito.com/oauth2/authorize`.
+
+```bash
+aws cognito-idp describe-user-pool-client --region "$AWS_REGION" --user-pool-id "$COGNITO_USER_POOL_ID" --client-id "$PORTAL_CLIENT_ID" --query 'UserPoolClient.{Callback:CallbackURLs,Logout:LogoutURLs,Flows:AllowedOAuthFlows}'
+```
+
+Kết quả mong đợi: `Callback` = `["https://portal.gitlabonlinecom.click/oauth2/callback"]`.
+
+> Nếu `create-user-pool-domain` báo lỗi domain đã tồn tại, nghĩa là prefix `gitlabonlinecom-eg-demo` đã có người dùng trong region. Đổi `COGNITO_DOMAIN_PREFIX` trong `config/demo.env`, xoá User Pool vừa tạo dở bằng `scripts/99-cleanup.sh --cognito` (script đã ghi ID pool vào `config/cognito.env` ngay sau khi tạo), rồi chạy lại `02-cognito-setup.sh`.
 
 Script dùng các lệnh AWS CLI dưới đây. Nếu muốn làm tay từng bước, chạy theo thứ tự:
 
@@ -51,7 +73,7 @@ Token sống ngắn giúp thay đổi group (thêm/bớt quyền) có hiệu l�
 
 | Claim | ID token | Access token (user) | Access token (Client Credentials) |
 |---|---|---|---|
-| `iss` | `https://cognito-idp.<region>.amazonaws.com/<pool_id>` | giống | giống |
+| `iss` | `https://cognito-idp.ap-southeast-1.amazonaws.com/<pool_id>` | giống | giống |
 | `aud` | client id | ❌ **không có** | ❌ **không có** |
 | `client_id` | ❌ | ✅ | ✅ |
 | `token_use` | `id` | `access` | `access` |

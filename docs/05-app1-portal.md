@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| URL | `https://portal.<domain>` |
+| URL | `https://portal.gitlabonlinecom.click` |
 | Namespace | `demo-portal` |
 | Backend | podinfo 6.15.0, 2 phiên bản: `portal-v1` (2 Pod, màu xanh) và `portal-v2` (1 Pod, màu cam) |
 | Chart | `helm/charts/demo-portal` |
@@ -82,9 +82,9 @@ Kết quả mong đợi: `Accepted Policy has been accepted.`
 curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' "https://portal.${DOMAIN}/"
 ```
 
-Kết quả mong đợi: `302 https://<prefix>.auth.<region>.amazoncognito.com/oauth2/authorize?...`
+Kết quả mong đợi: `302 https://gitlabonlinecom-eg-demo.auth.ap-southeast-1.amazoncognito.com/oauth2/authorize?...`
 
-Sau đó mở `https://portal.<domain>` trong trình duyệt và làm theo các test POR-06 đến POR-12 trong [docs/08](08-testing.md).
+Sau đó mở `https://portal.gitlabonlinecom.click` trong trình duyệt và làm theo các test POR-06 đến POR-12 trong [docs/08](08-testing.md).
 
 ## 6. Tuỳ chỉnh (`values.yaml`)
 
@@ -103,10 +103,10 @@ helm upgrade demo-portal helm/charts/demo-portal -n demo-portal -f helm/values/g
 
 ## 7. Logout
 
-`https://portal.<domain>/logout` xoá cookie phiên tại Envoy. Session tại Cognito Hosted UI vẫn còn, nên lần sau mở portal sẽ được đăng nhập lại ngay (SSO). Muốn đăng xuất hẳn khỏi Cognito, mở:
+`https://portal.gitlabonlinecom.click/logout` xoá cookie phiên tại Envoy. Session tại Cognito Hosted UI vẫn còn, nên lần sau mở portal sẽ được đăng nhập lại ngay (SSO). Muốn đăng xuất hẳn khỏi Cognito, mở:
 
 ```
-https://<prefix>.auth.<region>.amazoncognito.com/logout?client_id=<PORTAL_CLIENT_ID>&logout_uri=https://portal.<domain>/
+https://gitlabonlinecom-eg-demo.auth.ap-southeast-1.amazoncognito.com/logout?client_id=<PORTAL_CLIENT_ID>&logout_uri=https://portal.gitlabonlinecom.click/
 ```
 
 `logout_uri` này đã được khai báo trong app client `portal-web`.

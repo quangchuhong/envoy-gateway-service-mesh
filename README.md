@@ -43,9 +43,9 @@ Repo này triển khai **Envoy Gateway** làm API Gateway cho cụm EKS, với 3
 
 | App | URL | Namespace | Kiểu xác thực | Tính năng Envoy Gateway được demo |
 |---|---|---|---|---|
-| **1. Portal** (web UI, podinfo) | `https://portal.<domain>` | `demo-portal` | **OIDC** đăng nhập Cognito (Authorization Code) | Login tại gateway, JWT từ cookie, phân quyền theo `cognito:groups` (path admin), canary v1/v2 theo trọng số + header, security headers, rate limit theo IP, retry/timeout, passive health check |
-| **2. Orders API** (REST, go-httpbin) | `https://api.<domain>/orders` | `demo-orders` | **JWT** Cognito (user + máy) | Phân quyền theo group **và** scope, chặn ID token, rate limit theo user (`sub`), canary + routing theo header, URL rewrite, thêm/xoá header, CORS, retry, timeout, circuit breaker, fault injection, least-request LB |
-| **3. Partner API** (REST, go-httpbin) | `https://partner.<domain>/v1` | `demo-partner` | **API key** | Xác thực API key, ẩn key khỏi backend, phân quyền theo partner + IP allowlist, rate limit theo gói (gold/silver) |
+| **1. Portal** (web UI, podinfo) | `https://portal.gitlabonlinecom.click` | `demo-portal` | **OIDC** đăng nhập Cognito (Authorization Code) | Login tại gateway, JWT từ cookie, phân quyền theo `cognito:groups` (path admin), canary v1/v2 theo trọng số + header, security headers, rate limit theo IP, retry/timeout, passive health check |
+| **2. Orders API** (REST, go-httpbin) | `https://api.gitlabonlinecom.click/orders` | `demo-orders` | **JWT** Cognito (user + máy) | Phân quyền theo group **và** scope, chặn ID token, rate limit theo user (`sub`), canary + routing theo header, URL rewrite, thêm/xoá header, CORS, retry, timeout, circuit breaker, fault injection, least-request LB |
+| **3. Partner API** (REST, go-httpbin) | `https://partner.gitlabonlinecom.click/v1` | `demo-partner` | **API key** | Xác thực API key, ẩn key khỏi backend, phân quyền theo partner + IP allowlist, rate limit theo gói (gold/silver) |
 
 Dùng chung cho cả 3 app (ở mức Gateway): redirect HTTP→HTTPS, TLS, health check `/healthz`, lấy IP client, sinh `X-Request-Id`, xoá header nội bộ client tự gửi, access log JSON, HPA/PDB cho Envoy, drain kết nối khi scale.
 
@@ -69,7 +69,7 @@ Dùng chung cho cả 3 app (ở mức Gateway): redirect HTTP→HTTPS, TLS, heal
 │   ├── 02-cognito-setup.sh        # Tạo Cognito bằng AWS CLI
 │   ├── 03-gen-values.sh           # Sinh values từ config/*.env
 │   ├── 04-deploy.sh               # helm upgrade --install theo thứ tự
-│   ├── 05-dns.sh                  # Route 53: *.<domain> → NLB của Gateway
+│   ├── 05-dns.sh                  # Route 53: *.gitlabonlinecom.click → NLB của Gateway
 │   ├── get-token.sh               # Lấy token Cognito (user / máy) để test
 │   ├── render-all.sh              # helm template ra rendered/*.yaml
 │   ├── validate.sh                # helm lint + kiểm tra schema CRD
