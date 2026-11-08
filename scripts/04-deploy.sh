@@ -72,6 +72,10 @@ deploy_apps() {
   log "Trạng thái route và policy"
   kubectl get httproute -A
   kubectl get securitypolicy,backendtrafficpolicy -A
+  kubectl get backendtlspolicy -A 2>/dev/null || true
+  log "Trạng thái chấp nhận của các policy (mong đợi: Accepted)"
+  kubectl get securitypolicy,backendtrafficpolicy,backendtlspolicy -A \
+    -o custom-columns='KIND:.kind,NS:.metadata.namespace,NAME:.metadata.name,STATUS:.status.ancestors[0].conditions[0].reason' 2>/dev/null || true
 }
 
 case "${1:-}" in
