@@ -44,7 +44,7 @@ Repo này triển khai **Envoy Gateway** làm API Gateway cho cụm EKS, với 3
 | App | URL | Namespace | Kiểu xác thực | Tính năng Envoy Gateway được demo |
 |---|---|---|---|---|
 | **1. Portal** (web UI, podinfo) | `https://portal.gitlabonlinecom.click` | `demo-portal` | **OIDC** đăng nhập Cognito (Authorization Code) | Login tại gateway, JWT từ cookie, phân quyền theo `cognito:groups` (path admin), canary v1/v2 theo trọng số + header, security headers, rate limit theo IP, retry/timeout, passive health check |
-| **2. Orders API** (REST, go-httpbin) | `https://api.gitlabonlinecom.click/orders` | `demo-orders` | **JWT** Cognito (user + máy) | Phân quyền theo group **và** scope, chặn ID token, rate limit theo user (`sub`), canary + routing theo header, URL rewrite, thêm/xoá header, CORS, retry, timeout, circuit breaker, fault injection, least-request LB |
+| **2. Orders API** (REST, go-httpbin) | `https://api.gitlabonlinecom.click/orders` | `demo-orders` | **JWT** Cognito (user + máy) | Phân quyền theo group **và** scope, chặn ID token, rate limit theo user (`sub`), canary + routing theo header, URL rewrite, thêm/xoá header, CORS, retry, timeout, circuit breaker, fault injection, least-request LB, **TLS tới backend (`BackendTLSPolicy`, CA nội bộ)** |
 | **3. Partner API** (REST, go-httpbin) | `https://partner.gitlabonlinecom.click/v1` | `demo-partner` | **API key** | Xác thực API key, ẩn key khỏi backend, phân quyền theo partner + IP allowlist, rate limit theo gói (gold/silver) |
 
 Dùng chung cho cả 3 app (ở mức Gateway): redirect HTTP→HTTPS, TLS, health check `/healthz`, lấy IP client, sinh `X-Request-Id`, xoá header nội bộ client tự gửi, access log JSON, HPA/PDB cho Envoy, drain kết nối khi scale.
@@ -74,7 +74,7 @@ Dùng chung cho cả 3 app (ở mức Gateway): redirect HTTP→HTTPS, TLS, heal
 │   ├── render-all.sh              # helm template ra rendered/*.yaml
 │   ├── validate.sh                # helm lint + kiểm tra schema CRD
 │   └── 99-cleanup.sh              # Gỡ demo
-└── tests/run-tests.sh             # 47 test case tự động
+└── tests/run-tests.sh             # 48 test case tự động
 ```
 
 ## Môi trường đang cấu hình

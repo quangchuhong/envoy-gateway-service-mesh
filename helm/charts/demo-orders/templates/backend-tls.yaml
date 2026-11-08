@@ -1,0 +1,70 @@
+{{- $tls := .Values.backendTLS -}}
+{{- if $tls.enabled }}
+{{- /*
+  TLS cho đoạn Envoy -> Pod orders-api (BackendTLSPolicy), không cần cert-manager:
+
+  - Chart tự sinh một CA nội bộ và một cert cho backend (hostname {{ $tls.hostname }}) do CA đó ký.
+  - Secret {{ $tls.secretName }}  : cert + private key, mount vào Pod go-httpbin để phục vụ HTTPS.
+  - ConfigMap {{ $tls.caConfigMapName }}: chỉ chứa ca.crt (public), để Envoy kiểm tra cert của backend.
+  - Dùng lookup để giữ nguyên CA/cert qua các lần "helm upgrade" (chỉ sinh mới khi chưa có).
+    "helm template" không truy cập cụm nên mỗi lần render sẽ sinh bộ mới (bình thường).
+*/ -}}
+{{- $secret := lookup "v1" "Secret" .Release.Namespace $tls.secretName -}}
+{{- $cm := lookup "v1" "ConfigMap" .Release.Namespace $tls.caConfigMapName -}}
+{{- $crt := "" -}}{{- $key := "" -}}{{- $caCrt := "" -}}
+{{- if and $secret $secret.data $cm $cm.data (index $cm.data "ca.crt") }}
+{{- $crt = index $secret.data "tls.crt" | b64dec -}}
+{{- $key = index $secret.data "tls.key" | b64dec -}}
+{{- $caCrt = index $cm.data "ca.crt" -}}
+{{- else }}
+{{- $ca := genCA "demo-orders-backend-ca" (int $tls.validityDays) -}}
+{{- $cert := genSignedCert $tls.hostname nil (list $tls.hostname) (int $tls.validityDays) $ca -}}
+{{- $crt = $cert.Cert -}}{{- $key = $cert.Key -}}{{- $caCrt = $ca.Cert -}}
+{{- end }}
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/tls
+metadata:
+  name: {{ $tls.secretName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+data:
+  tls.crt: {{ $crt | b64enc }}
+  tls.key: {{ $key | b64enc }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $tls.caConfigMapName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+data:
+  ca.crt: |
+    {{- $caCrt | nindent 4 }}
+---
+# BackendTLSPolicy (Gateway API chuẩn): Envoy mở TLS tới Service backend,
+# gửi SNI = hostname và chỉ chấp nhận cert do CA trong ConfigMap ký, có đúng hostname.
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: orders-api-backend-tls
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    {{- range $ver, $_ := .Values.versions }}
+    - group: ""
+      kind: Service
+      name: orders-api-{{ $ver }}
+      sectionName: https
+    {{- end }}
+  validation:
+    caCertificateRefs:
+      - group: ""
+        kind: ConfigMap
+        name: {{ $tls.caConfigMapName }}
+    hostname: {{ $tls.hostname }}
+{{- end }}

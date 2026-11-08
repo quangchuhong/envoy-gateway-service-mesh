@@ -68,6 +68,31 @@ Routing trong `orders-api`:
 - Thêm `X-Gateway: envoy-gateway`, xoá `X-Debug-Internal` (request); thêm `Cache-Control: no-store` (response).
 - Mỗi backend gắn `X-Backend-Version: v1|v2` vào cả request lẫn response để kiểm tra canary.
 
+## 3b. TLS từ Envoy tới backend (`BackendTLSPolicy`)
+
+Đoạn Envoy → Pod của Orders API được **mã hoá TLS**, và Envoy **kiểm tra cert của backend**:
+
+| Thành phần | Vai trò |
+|---|---|
+| CA nội bộ (chart tự sinh bằng Helm, không cần cert-manager) | Ký cert cho backend |
+| `Secret orders-api-backend-tls` | Cert + key của backend, mount vào Pod; go-httpbin chạy HTTPS (`-https-cert-file`, `-https-key-file`) |
+| `ConfigMap orders-api-backend-ca` | `ca.crt` để Envoy kiểm tra cert backend |
+| `BackendTLSPolicy orders-api-backend-tls` | Gắn vào Service `orders-api-v1`, `orders-api-v2` (port `https`): SNI `orders-api.demo-orders.svc`, chỉ tin CA nội bộ |
+
+Kiểm tra:
+
+```bash
+kubectl get backendtlspolicy -n demo-orders orders-api-backend-tls -o jsonpath='{range .status.ancestors[*].conditions[*]}{.type}={.status} {.reason}{"\n"}{end}'
+```
+
+Kết quả mong đợi: `Accepted=True` và `ResolvedRefs=True`.
+
+```bash
+curl -s -H "Authorization: Bearer $(./scripts/get-token.sh user dev)" "https://api.gitlabonlinecom.click/orders/1" | jq -r .url
+```
+
+Kết quả mong đợi: `https://api.gitlabonlinecom.click/anything/orders/1`. Tiền tố `https://` cho thấy backend nhận kết nối TLS từ Envoy (test ORD-28). Tắt bằng `--set backendTLS.enabled=false`. Chi tiết: `helm/charts/demo-orders/README.md` mục 3.11.
+
 ## 4. Triển khai
 
 ```bash

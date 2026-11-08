@@ -78,6 +78,17 @@ chaos:
   delayPercent: 20
   delay: 500ms
 
+# --------------------------------------------------------------- TLS Envoy -> backend (BackendTLSPolicy)
+backendTLS:
+  # true: go-httpbin phục vụ HTTPS bằng cert do CA nội bộ ký (chart tự sinh, không cần cert-manager),
+  #       Envoy kết nối TLS tới backend và kiểm tra cert theo CA + hostname.
+  enabled: true
+  # Tên dùng làm SNI và phải có trong cert backend
+  hostname: orders-api.demo-orders.svc
+  secretName: orders-api-backend-tls       # cert + key của backend (mount vào Pod)
+  caConfigMapName: orders-api-backend-ca   # ca.crt để Envoy kiểm tra cert backend
+  validityDays: 365
+
 resources:
   requests:
     cpu: 20m

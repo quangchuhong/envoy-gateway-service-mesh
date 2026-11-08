@@ -39,7 +39,7 @@ Ba app dùng **chung một NLB và một cert wildcard**. Envoy phân biệt app
                                               │                                 │
                                               │                   Rate limit service + Redis
                                               ├──► portal-v1 / portal-v2      (ns demo-portal)
-                                              ├──► orders-api-v1 / -v2         (ns demo-orders)
+                                              ├══► orders-api-v1 / -v2         (ns demo-orders, TLS - BackendTLSPolicy)
                                               └──► partner-api                 (ns demo-partner)
 
  Envoy Gateway (control plane, ns envoy-gateway-system)
@@ -143,7 +143,17 @@ Client ─Authorization: Bearer <access token Cognito>─► Envoy
   ratelimit: 30 request/phút cho mỗi giá trị x-jwt-sub (mỗi user / mỗi client máy)
   router   : /orders → /anything/orders (URL rewrite), 90% v1 / 10% v2, header x-api-version: v2 → v2
              retry (connect-failure/reset), timeout 10s, outlier detection, least request
+  TLS tới Pod: BackendTLSPolicy - Envoy mở TLS tới Pod, SNI orders-api.demo-orders.svc,
+             chỉ tin cert do CA nội bộ (ConfigMap orders-api-backend-ca) ký
 ```
+
+Mức mã hoá theo từng đoạn:
+
+| Đoạn | Portal, Partner API | Orders API |
+|---|---|---|
+| User → NLB | TLS (cert ACM) | TLS (cert ACM) |
+| NLB → Envoy | TLS (cert self-signed) | TLS (cert self-signed) |
+| Envoy → Pod | HTTP | **TLS** (`BackendTLSPolicy`, CA nội bộ do chart sinh) |
 
 ### App 3 – Partner API (API key)
 

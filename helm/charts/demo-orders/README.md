@@ -25,7 +25,8 @@ demo-orders/
     ├── workload.yaml                    # Deployment + Service cho v1, v2
     ├── httproutes.yaml                  # 4 HTTPRoute (orders-api, -unstable, -slow, -chaos)
     ├── securitypolicy.yaml              # CORS + JWT + phân quyền (gắn cả 4 route)
-    └── backendtrafficpolicies.yaml      # 4 BackendTrafficPolicy, mỗi route 1 policy
+    ├── backendtrafficpolicies.yaml      # 4 BackendTrafficPolicy, mỗi route 1 policy
+    └── backend-tls.yaml                 # CA nội bộ + cert backend + BackendTLSPolicy (TLS Envoy -> Pod)
 ```
 
 Resource được tạo:
@@ -36,6 +37,7 @@ Resource được tạo:
 | `httproutes.yaml` | `HTTPRoute` | `orders-api`, `orders-unstable`, `orders-slow`, `orders-chaos` |
 | `securitypolicy.yaml` | `SecurityPolicy` | `orders-api-auth` |
 | `backendtrafficpolicies.yaml` | `BackendTrafficPolicy` | `orders-api-traffic`, `orders-unstable-traffic`, `orders-slow-traffic`, `orders-chaos-traffic` |
+| `backend-tls.yaml` | `Secret`, `ConfigMap`, `BackendTLSPolicy` | `orders-api-backend-tls`, `orders-api-backend-ca`, `orders-api-backend-tls` |
 
 ### Vì sao tách thành 4 HTTPRoute?
 
@@ -483,7 +485,95 @@ Dùng để thử khả năng chịu lỗi của **client** (frontend có hiển
 
 > Bước fault injection chạy **trước** bước xác thực trong Envoy, nên route `/orders/chaos` có thể trả 503 ngay cả với request chưa có token. Chỉ bật fault injection trên route dành riêng cho thử nghiệm.
 
-### 3.11 Tài nguyên Pod
+### 3.11 TLS từ Envoy tới backend (BackendTLSPolicy)
+
+```yaml
+backendTLS:
+  enabled: true
+  hostname: orders-api.demo-orders.svc
+  secretName: orders-api-backend-tls
+  caConfigMapName: orders-api-backend-ca
+  validityDays: 365
+```
+
+Mặc định Envoy gọi Pod bằng HTTP thường. Bật `backendTLS` thì **đoạn Envoy → Pod cũng được mã hoá**, và Envoy **kiểm tra cert của backend** trước khi gửi request:
+
+```
+User ─TLS (ACM)─► NLB ─TLS─► Envoy ─TLS (CA nội bộ, kiểm tra cert)─► Pod orders-api
+```
+
+Cụm chưa có cert-manager, nên chart tự sinh cert bằng hàm `genCA` / `genSignedCert` của Helm (`templates/backend-tls.yaml`):
+
+| Resource | Nội dung | Ai dùng |
+|---|---|---|
+| CA nội bộ `demo-orders-backend-ca` | Sinh một lần, chỉ dùng để ký cert backend | – |
+| `Secret orders-api-backend-tls` (`kubernetes.io/tls`) | Cert + private key của backend, `CN`/SAN = `orders-api.demo-orders.svc` | Mount vào Pod go-httpbin tại `/etc/tls` |
+| `ConfigMap orders-api-backend-ca` | Chỉ `ca.crt` (public, không có key) | Envoy dùng để kiểm tra cert backend |
+
+Template dùng `lookup` để **giữ nguyên CA và cert** qua các lần `helm upgrade`: chỉ sinh bộ mới khi Secret hoặc ConfigMap chưa tồn tại.
+
+**Thay đổi ở Pod và Service** (`templates/workload.yaml`) khi `enabled: true`:
+
+```yaml
+args:
+  - -https-cert-file=/etc/tls/tls.crt      # go-httpbin phục vụ HTTPS trên cổng 8080
+  - -https-key-file=/etc/tls/tls.key
+readinessProbe:
+  httpGet: { path: /status/200, port: https, scheme: HTTPS }
+# Service: port đổi tên từ "http" thành "https" (BackendTLSPolicy tham chiếu qua sectionName)
+```
+
+**BackendTLSPolicy** (Gateway API chuẩn, `gateway.networking.k8s.io/v1`):
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: orders-api-backend-tls
+spec:
+  targetRefs:                         # gắn vào Service backend, KHÔNG gắn vào HTTPRoute
+    - group: ""
+      kind: Service
+      name: orders-api-v1
+      sectionName: https
+    - group: ""
+      kind: Service
+      name: orders-api-v2
+      sectionName: https
+  validation:
+    caCertificateRefs:                # CA để kiểm tra cert backend
+      - group: ""
+        kind: ConfigMap
+        name: orders-api-backend-ca
+    hostname: orders-api.demo-orders.svc   # SNI gửi đi + tên bắt buộc có trong cert backend
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `targetRefs` | Áp cho mọi route trỏ tới 2 Service này (cả 4 HTTPRoute của Orders API) |
+| `sectionName: https` | Chỉ áp cho port tên `https` của Service |
+| `caCertificateRefs` | Envoy chỉ tin cert do CA này ký. Cert tự ký khác hoặc do CA khác ký đều bị từ chối |
+| `hostname` | Envoy gửi SNI này và đòi cert backend phải có đúng tên này. Không cần trùng tên DNS của Service |
+
+Đã kiểm chứng trên cấu hình Envoy sinh ra (`egctl x translate`): cả 6 cluster backend của Orders API có transport socket TLS, `sni: orders-api.demo-orders.svc` và kiểm tra SAN `exact: orders-api.demo-orders.svc`.
+
+**Cách thấy TLS hoạt động:** go-httpbin dựng trường `url` theo loại kết nối nó nhận. Khi Envoy → Pod là TLS, `url` bắt đầu bằng `https://` (test **ORD-28**):
+
+```bash
+curl -s -H "Authorization: Bearer $(./scripts/get-token.sh user dev)" "https://api.gitlabonlinecom.click/orders/1" | jq -r .url
+```
+
+Kết quả mong đợi: `https://api.gitlabonlinecom.click/anything/orders/1`.
+
+| Thao tác | Cách làm |
+|---|---|
+| Tắt (quay về HTTP) | `--set backendTLS.enabled=false` |
+| Xoay vòng (rotate) CA và cert | `kubectl delete -n demo-orders secret/orders-api-backend-tls configmap/orders-api-backend-ca`, chạy lại `helm upgrade`, rồi `kubectl rollout restart deploy -n demo-orders` để Pod nạp cert mới |
+| Production | Dùng cert-manager (CA Issuer hoặc AWS Private CA) cấp và tự gia hạn cert; chart chỉ cần trỏ `secretName`/`caConfigMapName` tới resource do cert-manager tạo |
+
+> Lần đầu bật trên cụm đang chạy HTTP, trong vài giây rollout có thể có lỗi `503`: Envoy đã chuyển sang TLS nhưng một số Pod cũ vẫn chạy HTTP. Sau khi rollout xong thì hết.
+
+### 3.12 Tài nguyên Pod
 
 ```yaml
 resources:
@@ -537,7 +627,7 @@ TOKEN=$(./scripts/get-token.sh user dev)
 curl -s -H "Authorization: Bearer $TOKEN" "https://api.${DOMAIN}/orders/42" | jq '{url, gw: .headers["X-Gateway"], sub: .headers["X-Jwt-Sub"], ver: .headers["X-Backend-Version"]}'
 ```
 
-Chạy nhóm test: `tests/run-tests.sh orders` (27 test, ORD-01 đến ORD-27, xem `docs/08-testing.md`).
+Chạy nhóm test: `tests/run-tests.sh orders` (28 test, ORD-01 đến ORD-28, xem `docs/08-testing.md`).
 
 ## 6. Lỗi thường gặp khi sửa values
 

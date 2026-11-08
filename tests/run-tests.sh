@@ -103,6 +103,8 @@ test_orders() {
   check ORD-14 "Gateway thêm header X-Gateway" envoy-gateway "$(echoed X-Gateway)"
   check ORD-15 "Gateway xoá header X-Debug-Internal" "<none>" "$(echoed X-Debug-Internal)"
   check ORD-16 "X-Jwt-Sub giả bị thay bằng sub thật" yes "$([[ $(echoed X-Jwt-Sub) != hacker && $(echoed X-Jwt-Sub) != "<none>" ]] && echo yes || echo no)"
+  # go-httpbin dựng "url" theo kết nối nó nhận: https:// nghĩa là Envoy -> Pod đã đi qua TLS (BackendTLSPolicy)
+  check ORD-28 "Envoy -> backend dùng TLS (BackendTLSPolicy): backend nhận kết nối https" yes "$([[ $(jq -r .url /tmp/eg-b.$$) == https://* ]] && echo yes || echo no)"
   # --- Routing theo header + canary
   v2=0; for i in 1 2 3 4 5; do req -H "Authorization: Bearer $T_DEV" -H 'x-api-version: v2' "$U" >/dev/null; [[ "$(hdr x-backend-version)" == v2 ]] && v2=$((v2+1)); done
   check ORD-17 "Header x-api-version: v2 -> 5/5 vào v2" 5 "$v2"

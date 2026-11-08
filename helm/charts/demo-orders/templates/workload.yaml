@@ -1,3 +1,5 @@
+{{- $tls := .Values.backendTLS -}}
+{{- $portName := ternary "https" "http" $tls.enabled -}}
 {{- range $ver, $cfg := .Values.versions }}
 ---
 apiVersion: apps/v1
@@ -30,17 +32,29 @@ spec:
         - name: httpbin
           image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
           imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          {{- if $tls.enabled }}
+          # Backend phục vụ HTTPS bằng cert do CA nội bộ ký (xem templates/backend-tls.yaml)
+          args:
+            - -https-cert-file=/etc/tls/tls.crt
+            - -https-key-file=/etc/tls/tls.key
+          {{- end }}
           ports:
-            - name: http
+            - name: {{ $portName }}
               containerPort: 8080
           readinessProbe:
             httpGet:
               path: /status/200
-              port: http
+              port: {{ $portName }}
+              {{- if $tls.enabled }}
+              scheme: HTTPS          # kubelet không kiểm tra cert khi probe
+              {{- end }}
           livenessProbe:
             httpGet:
               path: /status/200
-              port: http
+              port: {{ $portName }}
+              {{- if $tls.enabled }}
+              scheme: HTTPS
+              {{- end }}
           resources:
             {{- toYaml $.Values.resources | nindent 12 }}
           securityContext:
@@ -48,6 +62,18 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          {{- if $tls.enabled }}
+          volumeMounts:
+            - name: backend-tls
+              mountPath: /etc/tls
+              readOnly: true
+          {{- end }}
+      {{- if $tls.enabled }}
+      volumes:
+        - name: backend-tls
+          secret:
+            secretName: {{ $tls.secretName }}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -63,7 +89,8 @@ spec:
     app: orders-api
     version: {{ $ver }}
   ports:
-    - name: http
+    # Tên port "https" được BackendTLSPolicy tham chiếu qua sectionName
+    - name: {{ $portName }}
       port: 8080
-      targetPort: http
+      targetPort: {{ $portName }}
 {{- end }}

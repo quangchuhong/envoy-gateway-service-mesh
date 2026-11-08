@@ -2,7 +2,7 @@
 
 Có hai loại test:
 
-1. **47 test tự động** bằng `tests/run-tests.sh`: gọi API bằng `curl`, lấy token Cognito bằng AWS CLI.
+1. **48 test tự động** bằng `tests/run-tests.sh`: gọi API bằng `curl`, lấy token Cognito bằng AWS CLI.
 2. **7 test thủ công** bằng trình duyệt cho luồng đăng nhập OIDC của portal (POR-06 đến POR-12), vì cần nhập mật khẩu trên Hosted UI.
 
 ## 1. Chuẩn bị
@@ -117,6 +117,7 @@ Logout: mở `https://portal.gitlabonlinecom.click/logout` (xoá cookie Envoy), 
 | ORD-25 | 40 request `/orders/chaos/x` | Số `503` trong khoảng 8..32 (kỳ vọng khoảng 20) | Fault injection 50% |
 | ORD-26 | 35 request liên tiếp bằng token máy | Có `429` sau khoảng request thứ 30 | Rate limit 30/phút theo `sub` |
 | ORD-27 | Ngay sau ORD-26, viewer gọi API | `200` (bộ đếm riêng từng user) | Rate limit `Distinct` |
+| ORD-28 | Xem trường `url` mà backend trả về ở ORD-13 | Bắt đầu bằng `https://`: Envoy → Pod đi qua TLS | `BackendTLSPolicy` |
 
 ### Nhóm PAR – App 3 Partner API (API key)
 
