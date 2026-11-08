@@ -37,6 +37,12 @@ Chạy từng nhóm:
 ./tests/run-tests.sh orders
 ```
 
+Nhóm `routing` (24 test RT-xx cho demo định tuyến `shop.<domain>`) chạy riêng, không nằm trong lần chạy mặc định; xem [docs/12](12-traffic-routing.md#4-test):
+
+```bash
+./tests/run-tests.sh routing
+```
+
 Script in `PASS`/`FAIL` cho từng test và ghi báo cáo Markdown vào `tests/results/last-run.md`. Exit code khác 0 nếu có test FAIL.
 
 > ⏱ **Chờ khoảng 60 giây giữa hai lần chạy**: bộ đếm rate limit tính theo phút. Chạy lại ngay sẽ làm các request đầu tiên bị 429 và một số test thất bại sai.

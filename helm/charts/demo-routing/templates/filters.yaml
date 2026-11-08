@@ -1,0 +1,40 @@
+# HTTPRouteFilter là mở rộng của Envoy Gateway cho những gì Gateway API chuẩn chưa có.
+---
+# Thêm tiền tố /anything vào path (regex): /catalog/books -> /anything/catalog/books
+# (URLRewrite chuẩn ReplacePrefixMatch chỉ dùng được với match PathPrefix; regex dùng được cho mọi loại match)
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: HTTPRouteFilter
+metadata:
+  name: to-anything
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "routing.labels" . | nindent 4 }}
+spec:
+  urlRewrite:
+    path:
+      type: ReplaceRegexMatch
+      replaceRegexMatch:
+        pattern: "^/"
+        substitution: "/anything/"
+---
+# Gateway tự trả 405 cho method không được phép, không gọi backend
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: HTTPRouteFilter
+metadata:
+  name: method-not-allowed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "routing.labels" . | nindent 4 }}
+spec:
+  directResponse:
+    statusCode: 405
+    contentType: application/json
+    body:
+      type: Inline
+      inline: '{"error":"method_not_allowed","allowed":"GET, HEAD, POST, PUT, PATCH"}'
+    header:
+      set:
+        - name: Allow
+          value: "GET, HEAD, POST, PUT, PATCH"
+        - name: X-Route-Rule
+          value: method-not-allowed

@@ -54,4 +54,10 @@ domain: ${DOMAIN}
 EOF
 ok "demo-partner.yaml"
 
+# ---- demo-routing
+cat > "$OUT_DIR/demo-routing.yaml" <<EOF
+domain: ${DOMAIN}
+EOF
+ok "demo-routing.yaml"
+
 ok "Đã sinh values tại $OUT_DIR"

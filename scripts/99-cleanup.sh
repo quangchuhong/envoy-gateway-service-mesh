@@ -2,7 +2,7 @@
 # Gỡ demo (theo thứ tự ngược lại):
 #   scripts/99-cleanup.sh --monitoring  # Prometheus/Grafana + bản ghi grafana.<DOMAIN> (ALB GitLab giữ nguyên)
 #   scripts/99-cleanup.sh --dns         # xoá bản ghi Route 53 *.<DOMAIN> do scripts/05-dns.sh tạo
-#   scripts/99-cleanup.sh --apps        # 3 app demo + namespace
+#   scripts/99-cleanup.sh --apps        # 3 app demo + demo-routing + namespace
 #   scripts/99-cleanup.sh --platform    # Gateway (xoá NLB), EnvoyProxy, GatewayClass
 #   scripts/99-cleanup.sh --eg          # Envoy Gateway + Redis (CRD giữ lại, xem docs/09)
 #   scripts/99-cleanup.sh --cognito     # xoá User Pool Cognito + config/cognito.env
@@ -47,8 +47,8 @@ clean_monitoring() {
   ok "Đã gỡ monitoring. CRD monitoring.coreos.com giữ lại (xem docs/11 mục Gỡ cài)"
 }
 clean_apps() {
-  for r in demo-portal demo-orders demo-partner; do helm uninstall "$r" -n "$r" 2>/dev/null || true; done
-  kubectl delete namespace demo-portal demo-orders demo-partner --ignore-not-found
+  for r in demo-portal demo-orders demo-partner demo-routing; do helm uninstall "$r" -n "$r" 2>/dev/null || true; done
+  kubectl delete namespace demo-portal demo-orders demo-partner demo-routing --ignore-not-found
   ok "Đã gỡ app"
 }
 clean_platform() {

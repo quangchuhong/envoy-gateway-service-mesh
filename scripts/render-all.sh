@@ -26,6 +26,7 @@ render eg-redis eg-redis envoy-gateway-system
 render eg-platform eg-platform eg-gateway
 render demo-portal demo-portal demo-portal
 render demo-orders demo-orders demo-orders
+render demo-routing demo-routing demo-routing
 if $example; then
   render demo-partner demo-partner demo-partner --set apiKeys.keys.partner-gold=EXAMPLE --set apiKeys.keys.partner-silver=EXAMPLE
 else

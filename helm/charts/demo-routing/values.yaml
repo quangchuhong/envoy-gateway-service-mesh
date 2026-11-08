@@ -1,0 +1,40 @@
+# Demo định tuyến traffic  ->  https://shop.<domain>
+# Cài vào namespace "demo-routing" (không cần Cognito):
+#   helm upgrade --install demo-routing helm/charts/demo-routing -n demo-routing
+#
+# Mỗi "service" là một Deployment go-httpbin nhỏ. Gateway gắn 2 header vào response để biết request đi đâu:
+#   X-Routed-To:  service nhận request          (backendRef filter)
+#   X-Route-Rule: tên rule HTTPRoute đã khớp    (rule filter)
+# Backend nhận path gốc dưới /anything/... và echo lại method, header, path (JSON).
+
+domain: gitlabonlinecom.click
+hostPrefix: shop
+
+gateway:
+  name: eg-gateway
+  namespace: eg-gateway
+  sectionName: https
+
+image:
+  repository: docker.io/mccutchen/go-httpbin
+  tag: 2.25.0
+  pullPolicy: IfNotPresent
+
+# Danh sách backend. Tên được dùng trong templates/route-*.yaml
+services:
+  - web            # mặc định (catch-all /)
+  - catalog        # /catalog, /products mặc định
+  - admin          # /catalog/internal (prefix dài hơn)
+  - orders-read    # GET/HEAD /orders, regex /users/<số>/orders
+  - orders-write   # POST/PUT/PATCH /orders
+  - mobile         # header x-client: mobile, User-Agent iPhone/Android
+  - beta           # header x-beta + x-tenant, query ?preview=1
+
+replicas: 1
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 64Mi

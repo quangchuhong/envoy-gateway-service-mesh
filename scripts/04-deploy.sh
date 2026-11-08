@@ -4,6 +4,7 @@
 #   scripts/04-deploy.sh eg         # Redis + Envoy Gateway (control plane)
 #   scripts/04-deploy.sh platform   # GatewayClass, EnvoyProxy, Gateway (tạo NLB), ClientTrafficPolicy
 #   scripts/04-deploy.sh apps       # 3 app demo (portal, orders, partner)
+#   scripts/04-deploy.sh routing    # demo định tuyến theo path/method/header (shop.<DOMAIN>, docs/12)
 #   scripts/04-deploy.sh all
 source "$(dirname "$0")/lib.sh"
 load_env
@@ -78,10 +79,22 @@ deploy_apps() {
     -o custom-columns='KIND:.kind,NS:.metadata.namespace,NAME:.metadata.name,STATUS:.status.ancestors[0].conditions[0].reason' 2>/dev/null || true
 }
 
+deploy_routing() {
+  kubectl create namespace demo-routing --dry-run=client -o yaml | kubectl apply -f -
+  kubectl label namespace demo-routing gateway.demo.io/attach=true --overwrite
+  log "Cài demo-routing (https://shop.${DOMAIN})"
+  local vf=(); [[ -f "$VALUES/demo-routing.yaml" ]] && vf=(-f "$VALUES/demo-routing.yaml")
+  helm upgrade --install demo-routing "$CHARTS/demo-routing" -n demo-routing ${vf[@]+"${vf[@]}"} --wait
+  kubectl get httproute,httproutefilter -n demo-routing
+  kubectl get httproute -n demo-routing \
+    -o custom-columns='NAME:.metadata.name,ACCEPTED:.status.parents[0].conditions[?(@.type=="Accepted")].status,REFS:.status.parents[0].conditions[?(@.type=="ResolvedRefs")].status'
+}
+
 case "${1:-}" in
   eg) deploy_eg ;;
   platform) deploy_platform ;;
   apps) deploy_apps ;;
+  routing) deploy_routing ;;
   all) deploy_eg; deploy_platform; deploy_apps ;;
-  *) sed -n '2,7p' "$0"; exit 1 ;;
+  *) sed -n '2,8p' "$0"; exit 1 ;;
 esac

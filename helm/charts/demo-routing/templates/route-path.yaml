@@ -1,0 +1,69 @@
+# ============================================================ 1. ĐỊNH TUYẾN THEO URL PATH
+# Ba kiểu match path của Gateway API:
+#   Exact             khớp đúng toàn bộ path              /about  (không khớp /about/team)
+#   PathPrefix        khớp theo TỪNG SEGMENT phân tách "/" /catalog khớp /catalog, /catalog/x; KHÔNG khớp /catalogue
+#   RegularExpression regex RE2 trên toàn bộ path          ^/users/[0-9]+/orders$
+# Khi nhiều rule cùng khớp, Envoy Gateway xếp thứ tự: Exact > RegularExpression > PathPrefix dài hơn > PathPrefix ngắn hơn.
+# (Gateway API chỉ quy định Exact > Prefix; vị trí của regex do từng implementation quyết định, nên tránh để
+#  regex chồng lấn với prefix của rule khác.)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: shop-path
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "routing.labels" . | nindent 4 }}
+spec:
+  {{- include "routing.routeSpecHead" . | nindent 2 }}
+  rules:
+    - name: path-exact
+      matches:
+        - path:
+            type: Exact
+            value: /about
+      filters:
+        {{- include "routing.ruleFilters" "path-exact" | nindent 8 }}
+      backendRefs:
+        {{- include "routing.backend" "web" | nindent 8 }}
+
+    - name: path-prefix
+      matches:
+        - path:
+            type: PathPrefix
+            value: /catalog
+      filters:
+        {{- include "routing.ruleFilters" "path-prefix" | nindent 8 }}
+      backendRefs:
+        {{- include "routing.backend" "catalog" | nindent 8 }}
+
+    # Prefix dài hơn thắng: /catalog/internal/* vào admin dù /catalog cũng khớp
+    - name: path-prefix-longer
+      matches:
+        - path:
+            type: PathPrefix
+            value: /catalog/internal
+      filters:
+        {{- include "routing.ruleFilters" "path-prefix-longer" | nindent 8 }}
+      backendRefs:
+        {{- include "routing.backend" "admin" | nindent 8 }}
+
+    - name: path-regex
+      matches:
+        - path:
+            type: RegularExpression
+            value: "^/users/[0-9]+/orders$"
+      filters:
+        {{- include "routing.ruleFilters" "path-regex" | nindent 8 }}
+      backendRefs:
+        {{- include "routing.backend" "orders-read" | nindent 8 }}
+
+    # Catch-all: mọi path không khớp rule nào ở trên (kể cả ở các HTTPRoute khác cùng host)
+    - name: default
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+      filters:
+        {{- include "routing.ruleFilters" "default" | nindent 8 }}
+      backendRefs:
+        {{- include "routing.backend" "web" | nindent 8 }}

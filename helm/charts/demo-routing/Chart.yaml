@@ -1,0 +1,6 @@
+apiVersion: v2
+name: demo-routing
+description: "Demo định tuyến HTTPRoute theo URL Path, HTTP Method, HTTP Header và query param (không cần đăng nhập)"
+type: application
+version: 0.1.0
+appVersion: "2.25.0"

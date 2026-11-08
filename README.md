@@ -55,7 +55,7 @@ Dùng chung cho cả 3 app (ở mức Gateway): redirect HTTP→HTTPS, TLS, heal
 .
 ├── README.md
 ├── config/demo.env.example        # Biến môi trường (domain, region, ACM cert, Cognito prefix)
-├── docs/                          # Tài liệu từng bước (đọc theo thứ tự 00 → 11)
+├── docs/                          # Tài liệu từng bước (đọc theo thứ tự 00 → 12)
 ├── helm/
 │   ├── envoy-gateway/values.yaml  # Values cho chart chính thức gateway-helm (bật Global Rate Limit)
 │   ├── monitoring/                # Values kube-prometheus-stack (Prometheus + Grafana)
@@ -65,6 +65,7 @@ Dùng chung cho cả 3 app (ở mức Gateway): redirect HTTP→HTTPS, TLS, heal
 │       ├── demo-portal/           # App 1
 │       ├── demo-orders/           # App 2
 │       ├── demo-partner/          # App 3
+│       ├── demo-routing/          # Demo định tuyến theo path / method / header (shop.<domain>)
 │       └── eg-monitoring/         # PodMonitor/ServiceMonitor + dashboard Grafana Envoy Gateway
 ├── scripts/
 │   ├── 01-check-prereqs.sh        # Kiểm tra công cụ, cụm, LB Controller
@@ -138,6 +139,16 @@ Tạo bản ghi DNS wildcard `*.gitlabonlinecom.click` trỏ về NLB:
 ./tests/run-tests.sh
 ```
 
+Tuỳ chọn: demo định tuyến theo path / method / header (docs/12):
+
+```bash
+./scripts/04-deploy.sh routing
+```
+
+```bash
+./tests/run-tests.sh routing
+```
+
 Tuỳ chọn: Prometheus + Grafana (Grafana dùng chung ALB của GitLab, xem docs/11):
 
 ```bash
@@ -160,6 +171,7 @@ Tuỳ chọn: Prometheus + Grafana (Grafana dùng chung ALB của GitLab, xem do
 | 09 | [Vận hành & xử lý sự cố](docs/09-operations-troubleshooting.md) | Log, egctl, metrics, lỗi thường gặp, gỡ cài |
 | 10 | [Bước tiếp theo: F5, Istio](docs/10-next-steps-f5-istio.md) | Gắn F5 phía trước, tích hợp Istio mesh |
 | 11 | [Monitoring](docs/11-monitoring.md) | Prometheus + Grafana, Grafana dùng chung ALB của GitLab |
+| 12 | [Định tuyến traffic](docs/12-traffic-routing.md) | Rule theo URL Path, HTTP Method, HTTP Header, query param; thứ tự ưu tiên |
 
 Giải thích chi tiết từng khối `values.yaml` và template của từng chart:
 
@@ -171,6 +183,7 @@ Giải thích chi tiết từng khối `values.yaml` và template của từng c
 | App 1 | `demo-portal` | [helm/charts/demo-portal/README.md](helm/charts/demo-portal/README.md) |
 | App 2 | `demo-orders` | [helm/charts/demo-orders/README.md](helm/charts/demo-orders/README.md) |
 | App 3 | `demo-partner` | [helm/charts/demo-partner/README.md](helm/charts/demo-partner/README.md) |
+| Demo định tuyến | `demo-routing` | [helm/charts/demo-routing/README.md](helm/charts/demo-routing/README.md) |
 | Monitoring | `eg-monitoring` | [helm/charts/eg-monitoring/README.md](helm/charts/eg-monitoring/README.md) |
 
 ## Phiên bản đã dùng

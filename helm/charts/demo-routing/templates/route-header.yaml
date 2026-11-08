@@ -1,0 +1,71 @@
+# ============================================================ 3. ĐỊNH TUYẾN THEO HTTP HEADER (+ query param)
+# headers[].type:
+#   Exact (mặc định)   so sánh đúng giá trị, PHÂN BIỆT hoa thường ở GIÁ TRỊ (tên header không phân biệt)
+#   RegularExpression  regex RE2 trên giá trị header
+# Nhiều header trong một match là AND. Gateway API chuẩn không có "header không tồn tại"/"khác giá trị".
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: shop-header
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "routing.labels" . | nindent 4 }}
+spec:
+  {{- include "routing.routeSpecHead" . | nindent 2 }}
+  rules:
+    - name: header-exact
+      matches:
+        - path: { type: PathPrefix, value: /products }
+          headers:
+            - name: x-client
+              value: mobile
+      filters:
+        {{- include "routing.ruleFilters" "header-exact" | nindent 8 }}
+      backendRefs:
+        {{- include "routing.backend" "mobile" | nindent 8 }}
+
+    - name: header-regex
+      matches:
+        - path: { type: PathPrefix, value: /products }
+          headers:
+            - name: user-agent
+              type: RegularExpression
+              value: ".*(iPhone|Android).*"
+      filters:
+        {{- include "routing.ruleFilters" "header-regex" | nindent 8 }}
+      backendRefs:
+        {{- include "routing.backend" "mobile" | nindent 8 }}
+
+    # AND: phải có CẢ HAI header. Có 2 điều kiện header nên thắng header-exact (1 header) khi cùng khớp.
+    - name: header-and
+      matches:
+        - path: { type: PathPrefix, value: /products }
+          headers:
+            - name: x-beta
+              value: "true"
+            - name: x-tenant
+              value: internal
+      filters:
+        {{- include "routing.ruleFilters" "header-and" | nindent 8 }}
+      backendRefs:
+        {{- include "routing.backend" "beta" | nindent 8 }}
+
+    # Query param: /products?preview=1
+    - name: query-param
+      matches:
+        - path: { type: PathPrefix, value: /products }
+          queryParams:
+            - name: preview
+              value: "1"
+      filters:
+        {{- include "routing.ruleFilters" "query-param" | nindent 8 }}
+      backendRefs:
+        {{- include "routing.backend" "beta" | nindent 8 }}
+
+    - name: header-default
+      matches:
+        - path: { type: PathPrefix, value: /products }
+      filters:
+        {{- include "routing.ruleFilters" "header-default" | nindent 8 }}
+      backendRefs:
+        {{- include "routing.backend" "catalog" | nindent 8 }}

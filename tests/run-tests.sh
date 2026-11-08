@@ -6,6 +6,7 @@
 #   tests/run-tests.sh portal     # chỉ nhóm POR
 #   tests/run-tests.sh orders     # chỉ nhóm ORD
 #   tests/run-tests.sh partner    # chỉ nhóm PAR
+#   tests/run-tests.sh routing    # chỉ nhóm RT (demo-routing, docs/12) - KHÔNG chạy trong "all"
 #
 # Cần: curl, jq, aws (lấy token Cognito). Đọc cấu hình từ config/demo.env + config/cognito.env.
 set -uo pipefail
@@ -14,11 +15,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/config/demo.env"; source "$ROOT/config/cognito.env"
 for c in curl jq aws; do command -v "$c" >/dev/null || { echo "Thiếu $c"; exit 2; }; done
 
-PORTAL="portal.${DOMAIN}"; API="api.${DOMAIN}"; PARTNER="partner.${DOMAIN}"
+PORTAL="portal.${DOMAIN}"; API="api.${DOMAIN}"; PARTNER="partner.${DOMAIN}"; SHOP="shop.${DOMAIN}"
 CURL=(curl -sS --max-time 20)
 [[ "${INSECURE_TLS:-0}" == "1" ]] && CURL+=(-k)
 if [[ -n "${GATEWAY_IP:-}" ]]; then
-  for h in "$PORTAL" "$API" "$PARTNER" "unknown.${DOMAIN}"; do CURL+=(--resolve "$h:443:$GATEWAY_IP" --resolve "$h:80:$GATEWAY_IP"); done
+  for h in "$PORTAL" "$API" "$PARTNER" "$SHOP" "unknown.${DOMAIN}"; do CURL+=(--resolve "$h:443:$GATEWAY_IP" --resolve "$h:80:$GATEWAY_IP"); done
 fi
 
 PASS=0; FAIL=0; RESULTS=()
@@ -158,10 +159,54 @@ test_partner() {
   check PAR-11 "gold rate limit 100/phút -> 10 request không bị 429" 0 "$n429"
 }
 
+# =====================================================================================
+# Demo định tuyến: mỗi test kiểm tra mã HTTP, backend nhận (X-Routed-To) và rule đã khớp (X-Route-Rule)
+route() { # id, mô tả, backend mong đợi, rule mong đợi, [tham số curl...]
+  local id=$1 d=$2 eb=$3 er=$4 c; shift 4
+  c=$(req "$@")
+  check "$id" "$d" "200 $eb $er" "$c $(hdr X-Routed-To) $(hdr X-Route-Rule)"
+}
+test_routing() {
+  echo; echo "== RT: Định tuyến theo Path / Method / Header (https://${SHOP})"
+  local U="https://${SHOP}" c
+  echo "   -- URL Path"
+  route RT-01 "Exact /about"                               web         path-exact          "$U/about"
+  route RT-02 "Exact không khớp /about/team -> catch-all"  web         default             "$U/about/team"
+  route RT-03 "PathPrefix /catalog/books"                  catalog     path-prefix         "$U/catalog/books"
+  route RT-04 "Prefix theo segment: /catalogue không khớp" web         default             "$U/catalogue"
+  route RT-05 "Prefix dài hơn thắng /catalog/internal/x"   admin       path-prefix-longer  "$U/catalog/internal/stock"
+  route RT-06 "Regex ^/users/[0-9]+/orders\$"              orders-read path-regex          "$U/users/123/orders"
+  route RT-07 "Regex không khớp /users/abc/orders"         web         default             "$U/users/abc/orders"
+  req "$U/catalog/books?x=1" >/dev/null
+  check RT-08 "Backend nhận path gốc (rewrite /anything)" "/anything/catalog/books" \
+    "$(jq -r '.url' /tmp/eg-b.$$ 2>/dev/null | sed -E 's|^https?://[^/]+||; s|\?.*||')"
+  echo "   -- HTTP Method"
+  route RT-09 "GET /orders"                                orders-read  method-read         "$U/orders"
+  c=$("${CURL[@]}" -I -D /tmp/eg-h.$$ -o /dev/null -w '%{http_code}' "$U/orders/1")
+  check RT-10 "HEAD /orders/1" "200 orders-read method-read" "$c $(hdr X-Routed-To) $(hdr X-Route-Rule)"
+  route RT-11 "POST /orders"                               orders-write method-write        -X POST -d '{"item":1}' "$U/orders"
+  route RT-12 "PATCH /orders/1"                            orders-write method-write        -X PATCH "$U/orders/1"
+  c=$(req -X DELETE "$U/orders/1")
+  check RT-13 "DELETE /orders/1 -> 405 + Allow (gateway tự trả)" "405 GET,HEAD,POST,PUT,PATCH method-not-allowed" \
+    "$c $(hdr Allow) $(hdr X-Route-Rule)"
+  route RT-14 "POST /orders + x-client: mobile (path+method+header)" mobile method-write-mobile -X POST -H 'x-client: mobile' "$U/orders"
+  echo "   -- HTTP Header / query"
+  route RT-15 "GET /products (không header)"               catalog header-default  "$U/products"
+  route RT-16 "x-client: mobile"                           mobile  header-exact    -H 'x-client: mobile' "$U/products"
+  route RT-17 "Tên header không phân biệt hoa thường"      mobile  header-exact    -H 'X-CLIENT: mobile' "$U/products"
+  route RT-18 "Giá trị Exact phân biệt hoa thường (Mobile)" catalog header-default -H 'x-client: Mobile' "$U/products"
+  route RT-19 "Regex User-Agent iPhone"                    mobile  header-regex    -A 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)' "$U/products"
+  route RT-20 "AND: chỉ có x-beta -> không khớp"           catalog header-default  -H 'x-beta: true' "$U/products"
+  route RT-21 "AND: x-beta + x-tenant"                     beta    header-and      -H 'x-beta: true' -H 'x-tenant: internal' "$U/products"
+  route RT-22 "Nhiều header khớp hơn thắng"                beta    header-and      -H 'x-client: mobile' -H 'x-beta: true' -H 'x-tenant: internal' "$U/products"
+  route RT-23 "Query ?preview=1"                           beta    query-param     "$U/products?preview=1"
+  route RT-24 "Header thắng query param"                   mobile  header-exact    -H 'x-client: mobile' "$U/products?preview=1"
+}
+
 case "${1:-all}" in
-  gw) test_gw ;; portal) test_portal ;; orders) test_orders ;; partner) test_partner ;;
+  gw) test_gw ;; portal) test_portal ;; orders) test_orders ;; partner) test_partner ;; routing) test_routing ;;
   all) test_gw; test_portal; test_orders; test_partner ;;
-  *) sed -n '2,10p' "$0"; exit 2 ;;
+  *) sed -n '2,11p' "$0"; exit 2 ;;
 esac
 
 echo; echo "========== KẾT QUẢ: $PASS PASS, $FAIL FAIL =========="

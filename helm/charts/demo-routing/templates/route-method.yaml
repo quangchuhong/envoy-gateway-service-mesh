@@ -1,0 +1,64 @@
+# ============================================================ 2. ĐỊNH TUYẾN THEO HTTP METHOD
+# Trong MỘT match: các điều kiện (path, method, headers, queryParams) là AND.
+# Nhiều match trong cùng rule: OR. Mỗi match chỉ có 1 method -> muốn nhiều method thì liệt kê nhiều match.
+# Cùng path: match có method được ưu tiên hơn match không có method; match có nhiều header hơn được ưu tiên hơn.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: shop-method
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "routing.labels" . | nindent 4 }}
+spec:
+  {{- include "routing.routeSpecHead" . | nindent 2 }}
+  rules:
+    # Đọc: GET hoặc HEAD -> orders-read (vd scale riêng, trỏ vào read replica)
+    - name: method-read
+      matches:
+        - path: { type: PathPrefix, value: /orders }
+          method: GET
+        - path: { type: PathPrefix, value: /orders }
+          method: HEAD
+      filters:
+        {{- include "routing.ruleFilters" "method-read" | nindent 8 }}
+      backendRefs:
+        {{- include "routing.backend" "orders-read" | nindent 8 }}
+
+    # Ghi: POST/PUT/PATCH -> orders-write
+    - name: method-write
+      matches:
+        - path: { type: PathPrefix, value: /orders }
+          method: POST
+        - path: { type: PathPrefix, value: /orders }
+          method: PUT
+        - path: { type: PathPrefix, value: /orders }
+          method: PATCH
+      filters:
+        {{- include "routing.ruleFilters" "method-write" | nindent 8 }}
+      backendRefs:
+        {{- include "routing.backend" "orders-write" | nindent 8 }}
+
+    # Kết hợp path + method + header: POST /orders từ app mobile -> mobile
+    # (thắng method-write vì có thêm 1 điều kiện header)
+    - name: method-write-mobile
+      matches:
+        - path: { type: PathPrefix, value: /orders }
+          method: POST
+          headers:
+            - name: x-client
+              value: mobile
+      filters:
+        {{- include "routing.ruleFilters" "method-write-mobile" | nindent 8 }}
+      backendRefs:
+        {{- include "routing.backend" "mobile" | nindent 8 }}
+
+    # Method còn lại (DELETE, OPTIONS...) trên /orders: gateway trả 405, không có backendRefs
+    - name: method-not-allowed
+      matches:
+        - path: { type: PathPrefix, value: /orders }
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: method-not-allowed
