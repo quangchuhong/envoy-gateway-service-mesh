@@ -23,6 +23,10 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        # Image podinfo khai báo "USER app" (tên, không phải số). Với runAsNonRoot, Kubernetes cần UID dạng số
+        # để xác minh, nếu không Pod kẹt ở CreateContainerConfigError. app = uid 100, gid 101 trong image.
+        runAsUser: 100
+        runAsGroup: 101
         seccompProfile:
           type: RuntimeDefault
       containers:

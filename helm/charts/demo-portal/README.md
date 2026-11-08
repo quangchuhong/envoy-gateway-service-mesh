@@ -184,6 +184,7 @@ Các thiết lập cố định trong template (không nằm trong values):
 |---|---|
 | `readinessProbe /readyz`, `livenessProbe /healthz` | Pod chỉ nhận traffic khi sẵn sàng; Envoy Gateway chỉ đưa Pod Ready vào danh sách endpoint |
 | `runAsNonRoot`, `readOnlyRootFilesystem`, `drop: ALL`, `seccompProfile: RuntimeDefault` | Chạy container theo chuẩn bảo mật *restricted* của Kubernetes |
+| `runAsUser: 100`, `runAsGroup: 101` | Image podinfo khai báo `USER app` (tên). Với `runAsNonRoot: true`, Kubernetes cần UID **dạng số** để xác minh, nếu không Pod kẹt ở `CreateContainerConfigError`. `app` là uid 100, gid 101 trong image |
 
 ### 3.4 Canary
 

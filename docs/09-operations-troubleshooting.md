@@ -109,6 +109,7 @@ Metric hữu ích: `envoy_cluster_upstream_rq_retry` (số lần retry), `envoy_
 | Trình duyệt báo cert **hết hạn** | Cert mua ngoài import vào ACM không tự gia hạn | Import cert mới vào **cùng ARN**: `aws acm import-certificate --certificate-arn <ARN> --certificate fileb://cert.pem --private-key fileb://key.pem --certificate-chain fileb://chain.pem`. NLB tự dùng cert mới |
 | `Could not resolve host portal.gitlabonlinecom.click` | Chưa tạo bản ghi DNS, hoặc NLB bị tạo mới nên bản ghi trỏ vào NLB cũ | Chạy lại `scripts/05-dns.sh` |
 | NLB có rồi nhưng target unhealthy | Security Group của node/Pod chặn cổng 10443/10080 từ NLB | AWS Load Balancer Controller tự thêm rule; kiểm tra lại nếu dùng SG tự quản lý hoặc Security Groups for Pods |
+| `04-deploy.sh apps` đứng lâu ở bước cài app rồi báo `context deadline exceeded`; Pod ở `CreateContainerConfigError`, event `container has runAsNonRoot and image has non-numeric user` | Image khai báo user dạng tên (podinfo: `USER app`) nên Kubernetes không xác minh được non-root | Chart phải đặt `runAsUser`/`runAsGroup` dạng số (đã sửa cho `demo-portal`: 100/101). Xem `kubectl describe pod -n <ns>` |
 | HTTPRoute `NotAllowedByListeners` | Namespace thiếu label `gateway.demo.io/attach=true` | `kubectl label namespace <ns> gateway.demo.io/attach=true` |
 | HTTPRoute `ResolvedRefs=False` | Sai tên/port Service trong `backendRefs` | Kiểm tra Service trong cùng namespace |
 | `SecurityPolicy` báo `client secret not found` | Secret `portal-oidc-client` thiếu hoặc sai key (phải là `client-secret`) | Tạo lại Secret theo docs/05 |
