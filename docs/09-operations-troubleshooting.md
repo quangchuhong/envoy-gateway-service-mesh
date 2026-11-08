@@ -148,7 +148,7 @@ helm get manifest <release> -n <namespace> | kubectl apply -f -
 
 Ví dụ với Orders API: `helm get manifest demo-orders -n demo-orders | kubectl apply -f -`. Hoặc patch ngược từng trường về giá trị trong chart.
 
-Kiểm tra drift trước khi xử lý (cần plugin `helm-diff`):
+Kiểm tra drift trước khi xử lý (chỉ cần `kubectl`, server-side diff):
 
 ```bash
 helm get manifest demo-orders -n demo-orders | kubectl diff -f -
