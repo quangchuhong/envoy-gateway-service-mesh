@@ -131,6 +131,31 @@ Metric hữu ích: `envoy_cluster_upstream_rq_retry` (số lần retry), `envoy_
 | Không thấy `429` | Rate limit service không chạy, Redis lỗi, quên bật `rateLimit` trong values Envoy Gateway | `kubectl get deploy -n envoy-gateway-system envoy-ratelimit`; log của nó |
 | Mọi request bị `429` | Bộ đếm theo IP (portal) mà mọi request đều đến từ cùng IP (NLB không giữ IP client) | Kiểm tra `preserve_client_ip.enabled=true` trên target group |
 
+## 5b. Thay đổi tay bằng `kubectl` và Helm (drift)
+
+Sửa trực tiếp resource trên cụm (`kubectl edit`, `kubectl patch`) làm cấu hình **lệch** khỏi chart. Với **custom resource** (`BackendTLSPolicy`, `SecurityPolicy`, `BackendTrafficPolicy`, `HTTPRoute`, `Gateway`, `EnvoyProxy`...), `helm upgrade` của Helm 3 **không** ghi đè thay đổi tay: nó chỉ so manifest cũ với manifest mới của chart, không so với trạng thái đang chạy. Chart không đổi thì Helm coi như không có gì cần cập nhật.
+
+| Loại resource | `helm upgrade` có ghi đè thay đổi tay? |
+|---|---|
+| Resource gốc (Deployment, Service, ConfigMap, Secret...) | Có (so sánh 3 chiều, có tính trạng thái đang chạy) |
+| Custom resource (CRD) | **Không** (so sánh 2 chiều giữa manifest cũ và mới) |
+
+Cách đưa cụm về đúng chart:
+
+```bash
+helm get manifest <release> -n <namespace> | kubectl apply -f -
+```
+
+Ví dụ với Orders API: `helm get manifest demo-orders -n demo-orders | kubectl apply -f -`. Hoặc patch ngược từng trường về giá trị trong chart.
+
+Kiểm tra drift trước khi xử lý (cần plugin `helm-diff`):
+
+```bash
+helm get manifest demo-orders -n demo-orders | kubectl diff -f -
+```
+
+> Khuyến nghị: mọi thay đổi đi qua chart/values (hoặc GitOps như ArgoCD, công cụ tự phát hiện và sửa drift), không sửa tay trên cụm.
+
 ## 6. Gỡ cài đặt
 
 Theo thứ tự ngược với lúc cài:
