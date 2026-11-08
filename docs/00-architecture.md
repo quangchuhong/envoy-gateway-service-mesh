@@ -9,6 +9,8 @@ Môi trường triển khai:
 | Mục | Giá trị |
 |---|---|
 | AWS account / region | `609320954321` / `ap-southeast-1` |
+| Cụm EKS / VPC | `eks-cluster-ver1` / `vpc-0a7f2229b36e6ceb5` |
+| Subnet của NLB | `subnet-01e7b81b2c34fbaae`, `subnet-0729b4d3570c85035`, `subnet-063d005e791e4932f` (cùng subnet với cụm EKS) |
 | Domain | `gitlabonlinecom.click`, DNS wildcard `*.gitlabonlinecom.click` (Route 53) trỏ về NLB |
 | Cert public | Cert `*.gitlabonlinecom.click` đã mua và import vào ACM: `arn:aws:acm:ap-southeast-1:609320954321:certificate/569f4470-6ac3-4ef2-be6e-7eb012397305` |
 | App 1 – Portal | `https://portal.gitlabonlinecom.click` |

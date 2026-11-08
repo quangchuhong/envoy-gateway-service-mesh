@@ -114,6 +114,14 @@ aws ec2 create-tags --region "$AWS_REGION" --resources subnet-xxxx subnet-yyyy s
 
 > Cụm chạy trong **default VPC** (dải `172.31.0.0/16`) thì mọi subnet mặc định đều là public. Tag này chỉ dùng để AWS Load Balancer Controller **tự chọn** subnet cho Load Balancer internet-facing; nó không thay đổi route hay bảo mật của subnet, và các Load Balancer đang có không bị ảnh hưởng.
 
+**Môi trường hiện tại dùng cách 2** với 3 subnet của cụm EKS `eks-cluster-ver1` (VPC `vpc-0a7f2229b36e6ceb5`):
+
+```
+NLB_SUBNETS=subnet-01e7b81b2c34fbaae,subnet-0729b4d3570c85035,subnet-063d005e791e4932f
+```
+
+Giá trị này đã có sẵn trong `config/demo.env.example` và là giá trị mặc định `envoyProxy.service.nlb.subnets` của chart `eg-platform`. `01-check-prereqs.sh` kiểm tra từng subnet: thuộc VPC của cụm và có route `0.0.0.0/0` tới Internet Gateway (public). Nếu có subnet private, script dừng và báo subnet nào; khi đó thay bằng public subnet cùng AZ, hoặc dùng cách 1.
+
 **Cách 2: chỉ định subnet trực tiếp, không gắn tag**
 
 Dùng khi VPC dùng chung và bạn không được sửa tag. Đặt trong `config/demo.env`:

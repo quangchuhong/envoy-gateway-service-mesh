@@ -35,7 +35,34 @@ vpc=$(aws eks describe-cluster --region "$AWS_REGION" --name "$cluster" \
 if [[ -z "$vpc" || "$vpc" == "None" ]]; then
   warn "Không đọc được VPC của cụm $cluster (thiếu quyền eks:DescribeCluster?)"
 elif [[ -n "${NLB_SUBNETS:-}" ]]; then
-  ok "VPC $vpc; NLB dùng subnet chỉ định NLB_SUBNETS=$NLB_SUBNETS"
+  ok "VPC của cụm: $vpc; NLB dùng subnet chỉ định NLB_SUBNETS=$NLB_SUBNETS"
+  # Route 0.0.0.0/0 của route table chính (main) - áp cho subnet không gắn route table riêng
+  main_gw=$(aws ec2 describe-route-tables --region "$AWS_REGION" \
+    --filters "Name=vpc-id,Values=$vpc" "Name=association.main,Values=true" \
+    --query "RouteTables[0].Routes[?DestinationCidrBlock=='0.0.0.0/0'].GatewayId | [0]" --output text 2>/dev/null || true)
+  nlb_azs=""; bad=0
+  for sn in $(echo "$NLB_SUBNETS" | tr ',' ' '); do
+    info=$(aws ec2 describe-subnets --region "$AWS_REGION" --subnet-ids "$sn" \
+      --query 'Subnets[0].[VpcId,AvailabilityZone,CidrBlock]' --output text 2>/dev/null || true)
+    sn_vpc=$(echo "$info" | awk '{print $1}'); sn_az=$(echo "$info" | awk '{print $2}'); sn_cidr=$(echo "$info" | awk '{print $3}')
+    if [[ -z "$sn_vpc" || "$sn_vpc" == "None" ]]; then
+      warn "  $sn: không tìm thấy subnet"; bad=1; continue
+    fi
+    if [[ "$sn_vpc" != "$vpc" ]]; then
+      warn "  $sn: thuộc VPC $sn_vpc, không phải VPC của cụm ($vpc)"; bad=1; continue
+    fi
+    gw=$(aws ec2 describe-route-tables --region "$AWS_REGION" --filters "Name=association.subnet-id,Values=$sn" \
+      --query "RouteTables[0].Routes[?DestinationCidrBlock=='0.0.0.0/0'].GatewayId | [0]" --output text 2>/dev/null || true)
+    [[ -z "$gw" || "$gw" == "None" ]] && gw="$main_gw"
+    case "$gw" in
+      igw-*) ok "  $sn ($sn_az, $sn_cidr): public, route 0.0.0.0/0 -> $gw" ;;
+      *)     warn "  $sn ($sn_az, $sn_cidr): KHÔNG có route tới Internet Gateway (route: ${gw:-không có}) -> private subnet"; bad=1 ;;
+    esac
+    case " $nlb_azs " in *" $sn_az "*) ;; *) nlb_azs="$nlb_azs $sn_az" ;; esac
+  done
+  [[ "$bad" -eq 0 ]] || die "NLB internet-facing cần public subnet thuộc VPC $vpc. Sửa NLB_SUBNETS trong config/demo.env (docs/01 mục 3.1)."
+  n_az=$(echo $nlb_azs | wc -w | tr -d ' ')
+  [[ "$n_az" -ge 2 ]] && ok "NLB trải trên $n_az AZ:$nlb_azs" || warn "NLB chỉ ở 1 AZ ($nlb_azs): không chịu lỗi AZ"
 else
   # AWS Load Balancer Controller chọn subnet có tag kubernetes.io/role/elb (giá trị "1" hoặc rỗng)
   azs_raw=$(aws ec2 describe-subnets --region "$AWS_REGION" \

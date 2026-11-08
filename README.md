@@ -82,6 +82,8 @@ Dùng chung cho cả 3 app (ở mức Gateway): redirect HTTP→HTTPS, TLS, heal
 | Mục | Giá trị | Cấu hình ở |
 |---|---|---|
 | Region | `ap-southeast-1` | `config/demo.env.example` (`AWS_REGION`) |
+| Cụm EKS / VPC | `eks-cluster-ver1` / `vpc-0a7f2229b36e6ceb5` | `config/demo.env.example` (`EKS_CLUSTER_NAME`) |
+| Subnet của NLB | `subnet-01e7b81b2c34fbaae`, `subnet-0729b4d3570c85035`, `subnet-063d005e791e4932f` (subnet của cụm EKS) | `config/demo.env.example` (`NLB_SUBNETS`), mặc định `envoyProxy.service.nlb.subnets` của `eg-platform` |
 | Domain | `gitlabonlinecom.click` | `config/demo.env.example` (`DOMAIN`), mặc định `domain` của các chart |
 | Cert public (ACM) | `arn:aws:acm:ap-southeast-1:609320954321:certificate/569f4470-6ac3-4ef2-be6e-7eb012397305` (`*.gitlabonlinecom.click`) | `config/demo.env.example` (`ACM_CERT_ARN`), mặc định `envoyProxy.service.nlb.acmCertArn` của `eg-platform` |
 | App 1 – Portal | `https://portal.gitlabonlinecom.click` | |

@@ -74,7 +74,11 @@ envoyProxy:
       # kubernetes.io/role/elb=1 (internet-facing) hoặc kubernetes.io/role/internal-elb=1 (internal).
       # Chỉ định tường minh khi không muốn/không được gắn tag lên subnet, ví dụ ["subnet-aaa", "subnet-bbb"]
       # (tối thiểu 1 subnet; nên mỗi AZ một subnet, đúng loại public/private theo scheme).
-      subnets: []
+      # Môi trường hiện tại: subnet của cụm EKS eks-cluster-ver1 (VPC vpc-0a7f2229b36e6ceb5)
+      subnets:
+        - subnet-01e7b81b2c34fbaae
+        - subnet-0729b4d3570c85035
+        - subnet-063d005e791e4932f
     # Annotation bổ sung (ghi đè/ thêm vào annotation do chart sinh)
     annotations: {}
   # Access log JSON ra stdout: có thêm user (sub) và partner id để truy vết
