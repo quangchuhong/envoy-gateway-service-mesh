@@ -90,7 +90,7 @@ kubectl get gateway -n eg-gateway
 Envoy Gateway tự tạo Deployment/Service/HPA/PDB của Envoy:
 
 ```bash
-kubectl get deploy,svc,hpa,pdb -n eg-gateway -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway
+kubectl get deploy,svc,hpa,pdb -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway
 ```
 
 ```bash

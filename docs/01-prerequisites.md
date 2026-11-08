@@ -115,7 +115,7 @@ Thêm bản ghi CNAME xác thực mà ACM yêu cầu vào Route 53, chờ trạn
 | Thành phần | Cần gọi tới | Để làm gì |
 |---|---|---|
 | Pod `envoy-gateway` (control plane) | `cognito-idp.ap-southeast-1.amazonaws.com` | Đọc OIDC discovery |
-| Pod Envoy Proxy (`eg-gateway`) | `cognito-idp.ap-southeast-1.amazonaws.com`, `gitlabonlinecom-eg-demo.auth.ap-southeast-1.amazoncognito.com` | Tải JWKS, đổi code lấy token, refresh token |
+| Pod Envoy Proxy (`envoy-gateway-system`) | `cognito-idp.ap-southeast-1.amazonaws.com`, `gitlabonlinecom-eg-demo.auth.ap-southeast-1.amazoncognito.com` | Tải JWKS, đổi code lấy token, refresh token |
 
 Node ở private subnet cần **NAT Gateway** (hoặc egress tương đương) cho các kết nối trên.
 

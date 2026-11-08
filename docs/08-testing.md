@@ -129,10 +129,10 @@ Logout: mở `https://portal.gitlabonlinecom.click/logout` (xoá cookie Envoy), 
 | Mục | Cách làm | Kỳ vọng |
 |---|---|---|
 | IP client thật | `curl -s -H "x-api-key: $PARTNER_GOLD_KEY" https://partner.gitlabonlinecom.click/v1/ip \| jq .origin` | Trùng IP public của bạn (`curl ifconfig.me`) |
-| Access log có user | `kubectl logs -n eg-gateway -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -c envoy --tail=20` | Dòng JSON có `user_sub`, `client_id`, `partner_id`, `response_flags` |
+| Access log có user | `kubectl logs -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -c envoy --tail=20` | Dòng JSON có `user_sub`, `client_id`, `partner_id`, `response_flags` |
 | Rate limit dùng Redis | `kubectl exec -n envoy-gateway-system deploy/redis -- redis-cli --scan \| head` | Có key do rate limit service tạo |
-| HPA của Envoy | `kubectl get hpa -n eg-gateway` | min 2, max 6 |
-| Drain khi rollout | Trong lúc chạy `while true; do curl -s -o /dev/null -w '%{http_code}\n' -H "x-api-key: $PARTNER_GOLD_KEY" https://partner.gitlabonlinecom.click/v1/x; sleep 0.2; done`, chạy `kubectl rollout restart deploy -n eg-gateway -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway` | Không có `5xx` (có thể có `429` vì rate limit gold 100/phút) |
+| HPA của Envoy | `kubectl get hpa -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway` | min 2, max 6 |
+| Drain khi rollout | Trong lúc chạy `while true; do curl -s -o /dev/null -w '%{http_code}\n' -H "x-api-key: $PARTNER_GOLD_KEY" https://partner.gitlabonlinecom.click/v1/x; sleep 0.2; done`, chạy `kubectl rollout restart deploy -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway` | Không có `5xx` (có thể có `429` vì rate limit gold 100/phút) |
 | Đổi trọng số canary | `helm upgrade demo-portal ... --set canary.v2Weight=50` rồi refresh portal | Khoảng một nửa số lần là v2 |
 | Thu hồi user | `admin-user-global-sign-out` user dev, chờ token hết hạn (30 phút) | Gọi API bằng token mới không được (không đăng nhập lại được nếu đã `admin-disable-user`) |
 

@@ -27,7 +27,23 @@ deploy_platform() {
   log "Cài eg-platform"
   helm upgrade --install eg-platform "$CHARTS/eg-platform" -n eg-gateway --create-namespace \
     -f "$VALUES/eg-platform.yaml" --wait
-  kubectl wait --timeout=5m -n eg-gateway gateway/eg-gateway --for=condition=Programmed
+  if ! kubectl wait --timeout=5m -n eg-gateway gateway/eg-gateway --for=condition=Programmed; then
+    warn "Gateway chưa Programmed sau 5 phút. Thông tin chẩn đoán:"
+    echo "--- Điều kiện của Gateway:"
+    kubectl get gateway eg-gateway -n eg-gateway \
+      -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}: {.message}{"\n"}{end}' || true
+    echo "--- GatewayClass eg-demo:"
+    kubectl get gatewayclass eg-demo \
+      -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}: {.message}{"\n"}{end}' || true
+    # Pod/Service của Envoy nằm trong namespace của controller (envoy-gateway-system)
+    echo "--- Pod/Service Envoy (namespace envoy-gateway-system):"
+    kubectl get pods,svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -o wide || true
+    echo "--- Sự kiện của Service Envoy (tạo NLB):"
+    kubectl describe svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway | sed -n '/Events:/,$p' || true
+    echo "--- Lỗi gần đây của AWS Load Balancer Controller:"
+    kubectl logs -n kube-system deploy/aws-load-balancer-controller --tail=200 2>/dev/null | grep -iE "error|fail" | tail -10 || true
+    die "Xem docs/09-operations-troubleshooting.md mục 5"
+  fi
   ok "Gateway đã Programmed"
   kubectl get gateway -n eg-gateway eg-gateway
   log "Bước tiếp theo: tạo DNS *.${DOMAIN} -> NLB bằng scripts/05-dns.sh"

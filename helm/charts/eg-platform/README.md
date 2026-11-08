@@ -39,7 +39,7 @@ eg-platform/
 
 ### Resource do Envoy Gateway **tự tạo** (không nằm trong chart)
 
-Khi thấy `Gateway eg-gateway`, controller Envoy Gateway tự tạo các resource sau trong namespace `eg-gateway`, theo cấu hình của `EnvoyProxy`:
+Khi thấy `Gateway eg-gateway`, controller Envoy Gateway tự tạo các resource sau theo cấu hình của `EnvoyProxy`. Ở chế độ mặc định (`ControllerNamespace`), chúng nằm trong **namespace của controller `envoy-gateway-system`**, không phải `eg-gateway`:
 
 | Resource | Tên (dạng) | Nguồn cấu hình |
 |---|---|---|
@@ -52,7 +52,7 @@ Khi thấy `Gateway eg-gateway`, controller Envoy Gateway tự tạo các resour
 Các resource này có label `gateway.envoyproxy.io/owning-gateway-name=eg-gateway`:
 
 ```bash
-kubectl get deploy,svc,hpa,pdb -n eg-gateway -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway
+kubectl get deploy,svc,hpa,pdb -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway
 ```
 
 > Không sửa trực tiếp các resource tự tạo này: controller sẽ ghi đè lại. Mọi thay đổi phải đi qua `values.yaml` → `EnvoyProxy`.
@@ -473,7 +473,7 @@ telemetry:
 Xem log:
 
 ```bash
-kubectl logs -n eg-gateway -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -c envoy --tail=20
+kubectl logs -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -c envoy --tail=20
 ```
 
 ### 3.10 ClientTrafficPolicy
@@ -634,13 +634,13 @@ Kết quả mong đợi: `Accepted`.
 Pod, Service, HPA, PDB do Envoy Gateway tạo:
 
 ```bash
-kubectl get deploy,svc,hpa,pdb,pod -n eg-gateway -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -o wide
+kubectl get deploy,svc,hpa,pdb,pod -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -o wide
 ```
 
 Annotation NLB đã được đặt đúng:
 
 ```bash
-kubectl get svc -n eg-gateway -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -o jsonpath='{.items[0].metadata.annotations}' | jq
+kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -o jsonpath='{.items[0].metadata.annotations}' | jq
 ```
 
 Gọi thử health check và redirect (khi đã có DNS):
@@ -660,7 +660,7 @@ Chạy nhóm test của Gateway: `tests/run-tests.sh gw` (GW-01 đến GW-04).
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
 | GatewayClass `ACCEPTED=False` | `controllerName` không khớp cấu hình của Envoy Gateway, hoặc `EnvoyProxy` sai | `kubectl describe gatewayclass eg-demo` |
-| Gateway không có `ADDRESS` | Chưa có AWS Load Balancer Controller, subnet thiếu tag `kubernetes.io/role/elb=1`, hoặc IAM thiếu quyền | `kubectl describe svc -n eg-gateway`; log của `aws-load-balancer-controller` |
+| Gateway không có `ADDRESS` | Chưa có AWS Load Balancer Controller, subnet thiếu tag `kubernetes.io/role/elb=1`, hoặc IAM thiếu quyền | `kubectl describe svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway`; log của `aws-load-balancer-controller` |
 | Trình duyệt báo cert không hợp lệ | Đang ở chế độ `nlb-tcp` với cert self-signed | Đặt `nlb.acmCertArn`, hoặc dùng cert thật với `tls.create=false` |
 | `curl` báo lỗi TLS khi có ACM | Cert ACM không phủ hostname (ví dụ cert `gitlabonlinecom.click` nhưng gọi `portal.gitlabonlinecom.click`) | Dùng cert wildcard `*.gitlabonlinecom.click` |
 | Route của app báo `NotAllowedByListeners` | Namespace app thiếu label `gateway.demo.io/attach=true` | Gắn label cho namespace |

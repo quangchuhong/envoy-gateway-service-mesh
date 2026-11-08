@@ -75,7 +75,7 @@ Envoy Gateway làm API Gateway (North-South), Istio làm mesh bên trong (East-W
 | Cho Envoy Gateway nói chuyện mTLS với app | Inject sidecar Istio vào **Pod Envoy Proxy** (thêm label `sidecar.istio.io/inject: "true"` qua `envoyProxy` → `envoyDeployment.pod.labels`) |
 | Envoy Gateway route qua **Service** thay vì Pod IP | Đặt `routingType: Service` trong `EnvoyProxy` (hoặc trong `BackendTrafficPolicy`), để sidecar Istio nhận diện đích và áp mTLS |
 | Bật mTLS STRICT | `PeerAuthentication` mode `STRICT` khi mọi namespace đã có sidecar |
-| Chỉ cho Envoy Gateway gọi app | `AuthorizationPolicy` của Istio cho phép principal `cluster.local/ns/eg-gateway/sa/<serviceaccount của Envoy>` |
+| Chỉ cho Envoy Gateway gọi app | `AuthorizationPolicy` của Istio cho phép principal `cluster.local/ns/envoy-gateway-system/sa/<serviceaccount của Envoy>` |
 
 > Trước khi bật cho cụm thật, đọc mục tích hợp Istio trong tài liệu Envoy Gateway đúng phiên bản bạn dùng, và thử trên một namespace trước.
 

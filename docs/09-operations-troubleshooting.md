@@ -39,13 +39,13 @@ kubectl logs -n envoy-gateway-system deploy/envoy-gateway --tail=100
 Access log JSON của Envoy (mỗi request một dòng):
 
 ```bash
-kubectl logs -n eg-gateway -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -c envoy --tail=50 -f
+kubectl logs -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -c envoy --tail=50 -f
 ```
 
 Lọc request lỗi:
 
 ```bash
-kubectl logs -n eg-gateway -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -c envoy --tail=500 | grep '^{' | jq -c 'select(.response_code >= 400) | {authority, path, response_code, response_flags, user_sub, partner_id, client_ip}'
+kubectl logs -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -c envoy --tail=500 | grep '^{' | jq -c 'select(.response_code >= 400) | {authority, path, response_code, response_flags, user_sub, partner_id, client_ip}'
 ```
 
 Ý nghĩa `response_flags` thường gặp:
@@ -65,11 +65,11 @@ kubectl logs -n eg-gateway -l gateway.envoyproxy.io/owning-gateway-name=eg-gatew
 Cài `egctl` cùng phiên bản (v1.9.3) theo tài liệu Envoy Gateway, sau đó:
 
 ```bash
-egctl config envoy-proxy route -n eg-gateway -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway
+egctl config envoy-proxy route -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway
 ```
 
 ```bash
-egctl config envoy-proxy listener -n eg-gateway -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway
+egctl config envoy-proxy listener -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway
 ```
 
 Kiểm tra chart offline (không cần cụm), dịch toàn bộ resource ra cấu hình Envoy:
@@ -89,7 +89,7 @@ cat rendered/*.yaml > /tmp/all.yaml && egctl x translate --from gateway-api --to
 Envoy mở metrics Prometheus ở cổng `19001`, đường dẫn `/stats/prometheus`. Envoy Gateway đặt sẵn annotation `prometheus.io/scrape` cho Pod.
 
 ```bash
-kubectl port-forward -n eg-gateway "$(kubectl get pod -n eg-gateway -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -o name | head -1)" 19001:19001
+kubectl port-forward -n envoy-gateway-system "$(kubectl get pod -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway -o name | head -1)" 19001:19001
 ```
 
 ```bash
@@ -102,7 +102,7 @@ Metric hữu ích: `envoy_cluster_upstream_rq_retry` (số lần retry), `envoy_
 
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
-| Gateway không có `ADDRESS`, `PROGRAMMED=False` | AWS Load Balancer Controller chưa cài, subnet thiếu tag, IAM thiếu quyền | `kubectl logs -n kube-system deploy/aws-load-balancer-controller`; `kubectl describe svc -n eg-gateway` |
+| Gateway không có `ADDRESS`, `PROGRAMMED=False` | AWS Load Balancer Controller chưa cài, subnet thiếu tag, IAM thiếu quyền | `kubectl logs -n kube-system deploy/aws-load-balancer-controller`; `kubectl describe svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway` |
 | Gateway không có `ADDRESS`, log của AWS Load Balancer Controller báo lỗi certificate | ARN cert sai, hoặc cert khác account/region với cụm | Chạy `scripts/01-check-prereqs.sh` (kiểm tra account `609320954321`, region `ap-southeast-1`, trạng thái `ISSUED`) |
 | `curl` báo `SSL certificate problem` / trình duyệt cảnh báo cert | NLB đang ở chế độ `nlb-tcp`, Envoy trả cert self-signed | Kiểm tra listener 443 của NLB là `TLS` với cert ACM (docs/04 mục 4); `acmCertArn` trong `helm/values/generated/eg-platform.yaml` phải có giá trị |
 | Trình duyệt báo cert **hết hạn** | Cert mua ngoài import vào ACM không tự gia hạn | Import cert mới vào **cùng ARN**: `aws acm import-certificate --certificate-arn <ARN> --certificate fileb://cert.pem --private-key fileb://key.pem --certificate-chain fileb://chain.pem`. NLB tự dùng cert mới |

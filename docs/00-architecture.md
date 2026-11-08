@@ -30,7 +30,7 @@ Ba app dùng **chung một NLB và một cert wildcard**. Envoy phân biệt app
                                    └──────▲────────────────▲───────────────▲──────┘
                                 ① login   │   ③ đổi code   │ JWKS          │ token máy
                                 (browser) │   lấy token    │ (cache)       │ (client_credentials)
- 👤 User ── HTTPS ──► NLB (ACM cert) ──TLS──► Envoy Proxy (data plane, ns eg-gateway)
+ 👤 User ── HTTPS ──► NLB (ACM cert) ──TLS──► Envoy Proxy (data plane, ns envoy-gateway-system)
                       L4, giữ IP client       │ listener :443 (container 10443)
                                               │ health_check → fault → CORS → API key
                                               │ → OAuth2(OIDC) → JWT → RBAC → rate limit → router
@@ -49,11 +49,16 @@ Ba app dùng **chung một NLB và một cert wildcard**. Envoy phân biệt app
 
 | Namespace | Thành phần | Ai quản lý | Chart |
 |---|---|---|---|
-| `envoy-gateway-system` | Envoy Gateway control plane, rate limit service, Redis | Platform team | `gateway-helm` (chính thức), `eg-redis` |
-| `eg-gateway` | `Gateway`, `EnvoyProxy`, `ClientTrafficPolicy`, TLS secret, **Pod Envoy Proxy**, NLB Service | Platform team | `eg-platform` |
+| `envoy-gateway-system` | Envoy Gateway control plane, rate limit service, Redis; **Pod Envoy Proxy và Service NLB** (do controller tự tạo) | Platform team | `gateway-helm` (chính thức), `eg-redis` |
+| `eg-gateway` | `Gateway`, `EnvoyProxy`, `ClientTrafficPolicy`, TLS secret, route redirect HTTP→HTTPS | Platform team | `eg-platform` |
 | `demo-portal` | App 1 + `HTTPRoute` + `SecurityPolicy` + `BackendTrafficPolicy` | Team app | `demo-portal` |
 | `demo-orders` | App 2 + 4 `HTTPRoute` + policy | Team app | `demo-orders` |
 | `demo-partner` | App 3 + `HTTPRoute` + policy + Secret API key | Team app | `demo-partner` |
+
+> Envoy Gateway mặc định tạo Deployment/Service/HPA/PDB của Envoy trong **namespace của controller** (`envoy-gateway-system`), không phải namespace của Gateway. Tìm chúng bằng label `gateway.envoyproxy.io/owning-gateway-name=eg-gateway`:
+> ```bash
+> kubectl get deploy,pod,svc,hpa,pdb -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway
+> ```
 
 Đây là mô hình **phân vai của Gateway API**: platform team sở hữu Gateway (cửa vào, TLS, cấu hình Envoy), còn team app tự khai báo route và policy trong namespace của mình. Gateway chỉ nhận `HTTPRoute` từ namespace có label `gateway.demo.io/attach=true`, nên namespace lạ không gắn được route vào cửa chung.
 
