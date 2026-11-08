@@ -1,0 +1,11 @@
+# Code web_app.py dùng chung cho mọi website (khác nhau qua biến môi trường)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-app-code
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "web.labels" . | nindent 4 }}
+data:
+  web_app.py: |-
+{{ .Files.Get "app/web_app.py" | indent 4 }}

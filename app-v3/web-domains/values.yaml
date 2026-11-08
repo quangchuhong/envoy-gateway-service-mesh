@@ -1,0 +1,57 @@
+# Mỗi phần tử trong "sites" = một website riêng:
+#   Deployment + Service + HTTPRoute (theo domain) + BackendTrafficPolicy (cách chia tải tới Pod)
+#
+#   blog.<domain>   ─┐                         ┌─► Pod blog-xxx  (3 Pod, RoundRobin)
+#   docs.<domain>   ─┼─► NLB ─► Envoy (L7) ────┼─► Pod docs-xxx  (2 Pod, ConsistentHash theo header x-user)
+#   status.<domain> ─┤      đọc Host header,   └─► Pod status-xxx (1 Pod)
+#   health.<domain> ─┘      gửi THẲNG tới IP Pod (không qua ClusterIP/kube-proxy)
+#
+# Cài: helm upgrade --install web-domains app-v3/web-domains -n web-v3  (xem app-v3/README.md)
+
+domain: gitlabonlinecom.click
+
+gateway:
+  name: eg-gateway
+  namespace: eg-gateway
+  sectionName: https
+
+image:
+  repository: docker.io/library/python
+  tag: 3.12.8-alpine3.21
+  pullPolicy: IfNotPresent
+
+sites:
+  - name: blog
+    hosts: [blog]                # -> blog.<domain>
+    replicas: 3
+    message: "Blog: 3 Pod, Envoy chia đều RoundRobin"
+    color: "#2563eb"
+    loadBalancer:
+      type: RoundRobin
+
+  - name: docs
+    hosts: [docs]
+    replicas: 2
+    message: "Docs: cùng header x-user luôn vào cùng một Pod (ConsistentHash)"
+    color: "#16a34a"
+    loadBalancer:
+      type: ConsistentHash
+      consistentHash:
+        type: Header
+        header:
+          name: x-user
+
+  - name: status
+    hosts: [status, health]      # một HTTPRoute, hai domain
+    replicas: 1
+    message: "Status: một app phục vụ hai domain"
+    color: "#dc2626"
+    loadBalancer:
+      type: LeastRequest
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 24Mi
+  limits:
+    memory: 64Mi

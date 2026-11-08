@@ -1,0 +1,6 @@
+apiVersion: v2
+name: web-domains
+description: "Nhiều website, mỗi website một domain: Envoy Gateway định tuyến L7 theo Host header thẳng tới IP của Pod"
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
