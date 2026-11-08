@@ -35,6 +35,7 @@ File mẫu đã điền sẵn giá trị của môi trường hiện tại. Ch�
 | `COGNITO_DOMAIN_PREFIX` | `gitlabonlinecom-eg-demo` | Prefix Hosted UI: `https://gitlabonlinecom-eg-demo.auth.ap-southeast-1.amazoncognito.com`. Phải duy nhất trong region; nếu bị trùng thì đổi tên khác |
 | `COGNITO_POOL_NAME` | `eg-demo-users` | Tên User Pool |
 | `EG_VERSION` | `v1.9.3` | Phiên bản Envoy Gateway |
+| `NLB_SUBNETS` | trống | Danh sách subnet đặt NLB, cách nhau dấu phẩy. Để trống thì dùng subnet có tag `kubernetes.io/role/elb` (mục 3.1) |
 | `GATEWAY_IP`, `INSECURE_TLS` | trống, `0` | Chỉ dùng khi chạy test (xem docs/08) |
 
 AWS CLI phải dùng credentials của account **609320954321** (account chứa cert ACM và cụm EKS):
@@ -73,7 +74,63 @@ helm repo add eks https://aws.github.io/eks-charts
 helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller -n kube-system --set clusterName="$EKS_CLUSTER_NAME" --set serviceAccount.create=false --set serviceAccount.name=aws-load-balancer-controller
 ```
 
-Public subnet phải có tag `kubernetes.io/role/elb=1` để NLB internet-facing chọn đúng subnet.
+### 3.1 Subnet cho NLB internet-facing
+
+AWS Load Balancer Controller chỉ đặt NLB **internet-facing** vào các **public subnet** (có route `0.0.0.0/0` tới Internet Gateway) mang tag `kubernetes.io/role/elb`. Không có subnet nào mang tag này thì NLB **không được tạo**: Service của Envoy đứng ở `EXTERNAL-IP <pending>`, Gateway báo `Programmed=False AddressNotAssigned`, và log của controller báo:
+
+```
+unable to resolve at least one subnet (0 match VPC and tags: [kubernetes.io/role/elb])
+```
+
+`scripts/01-check-prereqs.sh` kiểm tra điều kiện này. Có hai cách xử lý; chọn **một** trong hai.
+
+**Cách 1 (khuyến nghị): gắn tag cho các public subnet của VPC**
+
+Lấy VPC của cụm (tên cụm lấy từ kubeconfig):
+
+```bash
+CLUSTER=$(kubectl config view --minify -o jsonpath='{.clusters[0].name}' | awk -F/ '{print $NF}')
+```
+
+```bash
+VPC=$(aws eks describe-cluster --region "$AWS_REGION" --name "$CLUSTER" --query cluster.resourcesVpcConfig.vpcId --output text)
+```
+
+Liệt kê subnet kèm loại public/private. Subnet public là subnet có route `0.0.0.0/0` tới `igw-...`, qua route table riêng hoặc route table chính (main) của VPC:
+
+```bash
+MAIN_IGW=$(aws ec2 describe-route-tables --region "$AWS_REGION" --filters Name=vpc-id,Values="$VPC" Name=association.main,Values=true --query "RouteTables[0].Routes[?DestinationCidrBlock=='0.0.0.0/0'].GatewayId | [0]" --output text)
+```
+
+```bash
+for sn in $(aws ec2 describe-subnets --region "$AWS_REGION" --filters Name=vpc-id,Values="$VPC" --query 'Subnets[].SubnetId' --output text); do gw=$(aws ec2 describe-route-tables --region "$AWS_REGION" --filters Name=association.subnet-id,Values="$sn" --query "RouteTables[0].Routes[?DestinationCidrBlock=='0.0.0.0/0'].GatewayId | [0]" --output text); [ "$gw" = "None" ] && gw="$MAIN_IGW (main)"; az=$(aws ec2 describe-subnets --region "$AWS_REGION" --subnet-ids "$sn" --query 'Subnets[0].AvailabilityZone' --output text); echo "$sn $az $gw"; done
+```
+
+Dòng có `igw-...` là **public subnet**. Gắn tag cho các public subnet đó (nên mỗi AZ một subnet):
+
+```bash
+aws ec2 create-tags --region "$AWS_REGION" --resources subnet-xxxx subnet-yyyy subnet-zzzz --tags Key=kubernetes.io/role/elb,Value=1
+```
+
+> Cụm chạy trong **default VPC** (dải `172.31.0.0/16`) thì mọi subnet mặc định đều là public. Tag này chỉ dùng để AWS Load Balancer Controller **tự chọn** subnet cho Load Balancer internet-facing; nó không thay đổi route hay bảo mật của subnet, và các Load Balancer đang có không bị ảnh hưởng.
+
+**Cách 2: chỉ định subnet trực tiếp, không gắn tag**
+
+Dùng khi VPC dùng chung và bạn không được sửa tag. Đặt trong `config/demo.env`:
+
+```bash
+export NLB_SUBNETS=subnet-xxxx,subnet-yyyy,subnet-zzzz
+```
+
+Chạy lại `./scripts/03-gen-values.sh`. Chart sẽ thêm annotation `service.beta.kubernetes.io/aws-load-balancer-subnets` cho Service của Envoy.
+
+**Sau khi xử lý**, áp dụng lại để AWS Load Balancer Controller tạo NLB:
+
+```bash
+./scripts/04-deploy.sh platform
+```
+
+Controller tự thử lại định kỳ, nhưng khoảng cách giữa các lần thử tăng dần (tới hàng chục phút). Chạy lại lệnh trên giúp có NLB ngay.
 
 ## 4. Cert ACM
 

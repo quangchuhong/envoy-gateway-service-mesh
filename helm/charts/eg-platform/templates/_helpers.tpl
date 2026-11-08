@@ -20,5 +20,8 @@ service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
 service.beta.kubernetes.io/aws-load-balancer-backend-protocol: ssl
 service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy: {{ $s.nlb.sslPolicy }}
 {{- end }}
+{{- with $s.nlb.subnets }}
+service.beta.kubernetes.io/aws-load-balancer-subnets: {{ join "," . | quote }}
+{{- end }}
 {{- end }}
 {{- end -}}

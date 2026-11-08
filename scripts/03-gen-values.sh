@@ -17,6 +17,12 @@ envoyProxy:
       # có ARN -> NLB terminate TLS bằng cert ACM; trống -> NLB TCP, Envoy dùng cert self-signed
       acmCertArn: "${ACM_CERT_ARN:-}"
 EOF
+# NLB_SUBNETS="subnet-a,subnet-b": đặt NLB vào đúng các subnet này (không cần tag kubernetes.io/role/elb)
+if [[ -n "${NLB_SUBNETS:-}" ]]; then
+  echo "      subnets:" >> "$OUT_DIR/eg-platform.yaml"
+  for sn in $(echo "$NLB_SUBNETS" | tr ',' ' '); do echo "        - \"$sn\"" >> "$OUT_DIR/eg-platform.yaml"; done
+  ok "eg-platform.yaml: NLB dùng subnet ${NLB_SUBNETS}"
+fi
 if [[ -n "${ACM_CERT_ARN:-}" ]]; then
   ok "eg-platform.yaml (chế độ nlb-tls, cert ACM)"
 else

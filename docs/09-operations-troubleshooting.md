@@ -102,6 +102,7 @@ Metric hữu ích: `envoy_cluster_upstream_rq_retry` (số lần retry), `envoy_
 
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
+| Gateway `Programmed=False AddressNotAssigned`; Service Envoy `EXTERNAL-IP <pending>`; event `unable to resolve at least one subnet (0 match VPC and tags: [kubernetes.io/role/elb])` | Không có public subnet nào mang tag `kubernetes.io/role/elb` | Gắn tag cho public subnet, hoặc đặt `NLB_SUBNETS` (docs/01 mục 3.1), rồi chạy lại `./scripts/04-deploy.sh platform` |
 | Gateway không có `ADDRESS`, `PROGRAMMED=False` | AWS Load Balancer Controller chưa cài, subnet thiếu tag, IAM thiếu quyền | `kubectl logs -n kube-system deploy/aws-load-balancer-controller`; `kubectl describe svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg-gateway` |
 | Gateway không có `ADDRESS`, log của AWS Load Balancer Controller báo lỗi certificate | ARN cert sai, hoặc cert khác account/region với cụm | Chạy `scripts/01-check-prereqs.sh` (kiểm tra account `609320954321`, region `ap-southeast-1`, trạng thái `ISSUED`) |
 | `curl` báo `SSL certificate problem` / trình duyệt cảnh báo cert | NLB đang ở chế độ `nlb-tcp`, Envoy trả cert self-signed | Kiểm tra listener 443 của NLB là `TLS` với cert ACM (docs/04 mục 4); `acmCertArn` trong `helm/values/generated/eg-platform.yaml` phải có giá trị |

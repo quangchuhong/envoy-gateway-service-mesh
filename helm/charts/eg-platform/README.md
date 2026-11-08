@@ -398,6 +398,7 @@ Hàm `merge` ưu tiên giá trị của **đối số đầu** (annotation ngư�
 | `nlb.acmCertArn` | `ssl-cert`, `ssl-ports`, `backend-protocol: ssl` | **Có giá trị** → chế độ `nlb-tls`: NLB giải mã TLS bằng cert ACM ở cổng 443, rồi **mã hoá lại** (ssl) khi gửi tới Envoy |
 | `nlb.sslPolicy` | `ssl-negotiation-policy` | Chính sách TLS phía người dùng: chỉ TLS 1.2 và 1.3 |
 | `nlb.sourceRanges` | `loadBalancerSourceRanges` | Chỉ IP trong danh sách được vào NLB. Nên đặt IP văn phòng hoặc VPN khi demo |
+| `nlb.subnets` | `aws-load-balancer-subnets` | Đặt NLB vào đúng các subnet này. Để trống thì AWS Load Balancer Controller tự chọn public subnet có tag `kubernetes.io/role/elb`. Script `03-gen-values.sh` điền từ biến `NLB_SUBNETS` |
 | `externalTrafficPolicy` | `envoyService.externalTrafficPolicy` | Với target type `ip` không ảnh hưởng. Có ý nghĩa khi chuyển sang `NodePort` (mục 4) |
 | `annotations` | Thêm vào hoặc ghi đè | Ví dụ gắn tag cho NLB: `service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags` |
 

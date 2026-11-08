@@ -70,6 +70,11 @@ envoyProxy:
       deregistrationDelaySeconds: 30
       # Giới hạn IP được truy cập (khuyến nghị cho demo), ví dụ ["203.0.113.0/24"]
       sourceRanges: []
+      # Subnet đặt NLB. Để trống: AWS Load Balancer Controller tự tìm public subnet có tag
+      # kubernetes.io/role/elb=1 (internet-facing) hoặc kubernetes.io/role/internal-elb=1 (internal).
+      # Chỉ định tường minh khi không muốn/không được gắn tag lên subnet, ví dụ ["subnet-aaa", "subnet-bbb"]
+      # (tối thiểu 1 subnet; nên mỗi AZ một subnet, đúng loại public/private theo scheme).
+      subnets: []
     # Annotation bổ sung (ghi đè/ thêm vào annotation do chart sinh)
     annotations: {}
   # Access log JSON ra stdout: có thêm user (sub) và partner id để truy vết

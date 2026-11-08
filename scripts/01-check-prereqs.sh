@@ -23,6 +23,41 @@ else
   warn "Không thấy AWS Load Balancer Controller. Xem docs/01-prerequisites.md mục 3."
 fi
 
+log "Kiểm tra subnet cho NLB internet-facing"
+# Tên cụm lấy từ kubeconfig (aws eks update-kubeconfig đặt tên cluster là ARN .../cluster/<tên>)
+ctx_cluster=$(kubectl config view --minify -o jsonpath='{.clusters[0].name}' 2>/dev/null || true)
+cluster="${ctx_cluster##*/}"; cluster="${cluster:-$EKS_CLUSTER_NAME}"
+if [[ -n "${EKS_CLUSTER_NAME:-}" && "$cluster" != "$EKS_CLUSTER_NAME" ]]; then
+  warn "EKS_CLUSTER_NAME=$EKS_CLUSTER_NAME khác cụm đang kết nối ($cluster). Nên sửa trong config/demo.env."
+fi
+vpc=$(aws eks describe-cluster --region "$AWS_REGION" --name "$cluster" \
+  --query cluster.resourcesVpcConfig.vpcId --output text 2>/dev/null || true)
+if [[ -z "$vpc" || "$vpc" == "None" ]]; then
+  warn "Không đọc được VPC của cụm $cluster (thiếu quyền eks:DescribeCluster?)"
+elif [[ -n "${NLB_SUBNETS:-}" ]]; then
+  ok "VPC $vpc; NLB dùng subnet chỉ định NLB_SUBNETS=$NLB_SUBNETS"
+else
+  # AWS Load Balancer Controller chọn subnet có tag kubernetes.io/role/elb (giá trị "1" hoặc rỗng)
+  azs_raw=$(aws ec2 describe-subnets --region "$AWS_REGION" \
+    --filters "Name=vpc-id,Values=$vpc" "Name=tag-key,Values=kubernetes.io/role/elb" \
+    --query 'Subnets[].AvailabilityZone' --output text 2>/dev/null || true)
+  # Đếm số AZ khác nhau (không dùng grep trong pipeline: grep không khớp sẽ làm set -e dừng script)
+  elb_azs=0
+  for az in $(echo "$azs_raw" | tr '\t' ' ' | tr ' ' '\n' | sort -u); do
+    [[ "$az" == "None" ]] || elb_azs=$((elb_azs + 1))
+  done
+  if [[ "${elb_azs:-0}" -ge 2 ]]; then
+    ok "VPC $vpc có subnet tag kubernetes.io/role/elb ở $elb_azs AZ"
+  elif [[ "${elb_azs:-0}" -eq 1 ]]; then
+    warn "Chỉ 1 AZ có subnet tag kubernetes.io/role/elb: NLB vẫn tạo được nhưng không chịu lỗi AZ"
+  else
+    die "VPC $vpc KHÔNG có subnet nào tag kubernetes.io/role/elb -> NLB sẽ không được tạo.
+       Cách 1: gắn tag cho public subnet (xem docs/01-prerequisites.md mục 3.1):
+         aws ec2 create-tags --region $AWS_REGION --resources <subnet-public-1> <subnet-public-2> --tags Key=kubernetes.io/role/elb,Value=1
+       Cách 2: chỉ định subnet: đặt NLB_SUBNETS=<subnet-1>,<subnet-2> trong config/demo.env rồi chạy lại 03-gen-values.sh"
+  fi
+fi
+
 log "Kiểm tra CRD Gateway API đã tồn tại từ trước (tránh xung đột phiên bản)"
 if kubectl get crd gateways.gateway.networking.k8s.io >/dev/null 2>&1; then
   warn "Cụm đã có Gateway API CRD (bundle-version: $(kubectl get crd gateways.gateway.networking.k8s.io -o jsonpath='{.metadata.annotations.gateway\.networking\.k8s\.io/bundle-version}')). Xem docs/03 mục 'Cụm đã có Gateway API CRD'."
