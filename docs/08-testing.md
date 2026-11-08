@@ -67,12 +67,22 @@ Script in `PASS`/`FAIL` cho từng test và ghi báo cáo Markdown vào `tests/r
 | Mã | Các bước | Kết quả mong đợi | Tính năng |
 |---|---|---|---|
 | POR-06 | Mở `https://portal.gitlabonlinecom.click`, đăng nhập bằng `USER_ADMIN_EMAIL` / `USER_ADMIN_PASSWORD` | Hiện trang podinfo, có message `Portal v1 (stable)` hoặc `Portal v2 (canary)` | OIDC Authorization Code |
-| POR-07 | Sau POR-06, mở DevTools → Application → Cookies | Có `PortalIdToken`, `PortalAccessToken` (tên đặt trong chart), cùng các cookie `OauthHMAC-…`, `OauthExpires-…`, `RefreshToken-…` do Envoy đặt (đuôi ngẫu nhiên), tất cả có cờ `HttpOnly`, `Secure` | Cookie phiên |
+| POR-07 | Sau POR-06, mở DevTools và xem cookie của `https://portal.gitlabonlinecom.click` (cách mở trên macOS: xem ghi chú dưới bảng) | Có `PortalIdToken`, `PortalAccessToken` (tên đặt trong chart), cùng các cookie `OauthHMAC-…`, `OauthExpires-…`, `RefreshToken-…` do Envoy đặt (đuôi ngẫu nhiên), tất cả có cờ `HttpOnly`, `Secure` | Cookie phiên |
 | POR-08 | Mở `https://portal.gitlabonlinecom.click/headers` | JSON chứa `X-User-Email` = email của bạn, `X-Jwt-Sub`; response có `Strict-Transport-Security`, `X-Frame-Options: DENY` | `claimToHeaders`, security headers |
 | POR-09 | Admin mở `https://portal.gitlabonlinecom.click/env` | `200`, hiện biến môi trường | Phân quyền path admin |
 | POR-10 | Đăng nhập bằng `USER_VIEWER_*`, mở `/` rồi `/env` | `/` được vào; `/env` trả `403 RBAC: access denied` | Deny path admin với group khác |
 | POR-11 | Đăng nhập bằng `USER_NOGROUP_*` | `403` ở mọi trang | `defaultAction: Deny` |
 | POR-12 | Đã đăng nhập, bấm F5 khoảng 20 lần ở `/` | Khoảng 20% lần hiện **màu cam / Portal v2**. Thêm header `x-canary: always` (dùng extension ModHeader) thì luôn là v2 | Canary theo trọng số + header |
+
+**Mở DevTools để xem cookie (POR-07) trên macOS** (phím F12 thường không dùng được):
+
+| Trình duyệt | Mở DevTools | Xem cookie |
+|---|---|---|
+| Chrome / Edge / Brave | `Cmd ⌘ + Option ⌥ + I`, hoặc menu **View → Developer → Developer Tools** | Tab **Application** (nếu ẩn thì bấm `»`) → **Storage → Cookies** |
+| Safari | Bật một lần: **Safari → Settings → Advanced → Show features for web developers**; sau đó `Cmd ⌘ + Option ⌥ + I` | Tab **Storage → Cookies** |
+| Firefox | `Cmd ⌘ + Option ⌥ + I` | Tab **Storage → Cookies** |
+
+Giải mã ID token: copy giá trị `PortalIdToken` rồi chạy `./scripts/get-token.sh decode "<giá trị>" | jq '{email, "cognito:groups", aud, token_use}'`. Kết quả mong đợi: `cognito:groups` là group của user, `aud` là client ID của `portal-web`, `token_use` là `id`.
 
 Logout: mở `https://portal.gitlabonlinecom.click/logout` (xoá cookie Envoy), rồi mở URL logout của Cognito ở [docs/05](05-app1-portal.md) mục 7.
 
