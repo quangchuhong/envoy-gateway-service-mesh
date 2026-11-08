@@ -1,0 +1,60 @@
+# Demo order-service + payment-service  ->  https://store.<domain>/api/orders
+#
+#   Client ──HTTPS──► Envoy Gateway ──► order-service (ns shop-order) ──HTTP──► payment-service (ns shop-payment)
+#                     JWT Cognito,        public: /api/orders              nội bộ, KHÔNG có route ngoài
+#                     phân quyền group
+#
+# Cài release vào namespace của order-service (2 namespace phải được tạo trước, xem app-v2/README.md):
+#   helm upgrade --install demo-shop app-v2/demo-shop -n shop-order --set cognito.issuer=...
+
+domain: gitlabonlinecom.click
+hostPrefix: store
+
+gateway:
+  name: eg-gateway
+  namespace: eg-gateway
+  sectionName: https
+
+namespaces:
+  order: shop-order       # namespace của release, có HTTPRoute + SecurityPolicy
+  payment: shop-payment   # chỉ có payment-service
+
+# Code Python nằm trong app/*.py, được nạp vào ConfigMap (không cần build image)
+image:
+  repository: docker.io/library/python
+  tag: 3.12.8-alpine3.21
+  pullPolicy: IfNotPresent
+
+order:
+  replicas: 2
+  paymentTimeoutSeconds: 3     # order-service chờ payment-service tối đa bao lâu
+
+payment:
+  replicas: 2
+  approvalLimit: 1000          # amount <= limit -> APPROVED, lớn hơn -> DECLINED (402)
+
+# --------------------------------------------------------------- AWS Cognito (JWT)
+cognito:
+  issuer: "https://cognito-idp.<REGION>.amazonaws.com/<USER_POOL_ID>"
+
+# Phân quyền theo group Cognito (claim cognito:groups trong access token)
+authz:
+  readGroups: ["viewer", "developer", "devops-admin"]   # GET /api/orders
+  writeGroups: ["developer", "devops-admin"]            # POST /api/orders
+
+# Timeout từ Envoy tới order-service (phải lớn hơn paymentTimeoutSeconds)
+requestTimeout: 10s
+
+# --------------------------------------------------------------- NetworkPolicy (east-west)
+# true: payment-service chỉ nhận traffic từ order-service; order-service chỉ nhận từ Envoy Gateway.
+# Cần bật Network Policy trên Amazon VPC CNI (xem app-v2/README.md mục 9). Cụm chưa hỗ trợ thì policy không có tác dụng.
+networkPolicy:
+  enabled: false
+  envoyGatewayNamespace: envoy-gateway-system
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 96Mi

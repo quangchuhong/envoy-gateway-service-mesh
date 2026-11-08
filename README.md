@@ -55,6 +55,7 @@ Dùng chung cho cả 3 app (ở mức Gateway): redirect HTTP→HTTPS, TLS, heal
 .
 ├── README.md
 ├── config/demo.env.example        # Biến môi trường (domain, region, ACM cert, Cognito prefix)
+├── app-v2/                        # order-service + payment-service, guide kubectl + helm (app-v2/README.md)
 ├── docs/                          # Tài liệu từng bước (đọc theo thứ tự 00 → 12)
 ├── helm/
 │   ├── envoy-gateway/values.yaml  # Values cho chart chính thức gateway-helm (bật Global Rate Limit)
@@ -183,6 +184,7 @@ Giải thích chi tiết từng khối `values.yaml` và template của từng c
 | App 1 | `demo-portal` | [helm/charts/demo-portal/README.md](helm/charts/demo-portal/README.md) |
 | App 2 | `demo-orders` | [helm/charts/demo-orders/README.md](helm/charts/demo-orders/README.md) |
 | App 3 | `demo-partner` | [helm/charts/demo-partner/README.md](helm/charts/demo-partner/README.md) |
+| App v2: order + payment | `app-v2/demo-shop` | [app-v2/README.md](app-v2/README.md) (guide triển khai bằng kubectl + helm) |
 | Demo định tuyến | `demo-routing` | [helm/charts/demo-routing/README.md](helm/charts/demo-routing/README.md) |
 | Monitoring | `eg-monitoring` | [helm/charts/eg-monitoring/README.md](helm/charts/eg-monitoring/README.md) |
 

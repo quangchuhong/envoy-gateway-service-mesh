@@ -1,0 +1,6 @@
+# payment-service: nội bộ, nằm ở namespace riêng, KHÔNG có HTTPRoute -> Internet không gọi được.
+# order-service gọi qua DNS nội bộ: http://payment-service.{{ .Values.namespaces.payment }}.svc.cluster.local:8080
+{{- include "shop.pyService" (dict
+      "root" $ "name" "payment-service" "ns" .Values.namespaces.payment
+      "file" "app/payment_service.py" "replicas" .Values.payment.replicas
+      "env" (list (dict "name" "APPROVAL_LIMIT" "value" (toString .Values.payment.approvalLimit)))) }}

@@ -1,0 +1,8 @@
+# order-service: public qua Envoy Gateway (/api/orders), gọi payment-service khi tạo đơn.
+{{- $paymentUrl := printf "http://payment-service.%s.svc.cluster.local:8080" .Values.namespaces.payment }}
+{{- include "shop.pyService" (dict
+      "root" $ "name" "order-service" "ns" .Values.namespaces.order
+      "file" "app/order_service.py" "replicas" .Values.order.replicas
+      "env" (list
+        (dict "name" "PAYMENT_URL" "value" $paymentUrl)
+        (dict "name" "PAYMENT_TIMEOUT" "value" (toString .Values.order.paymentTimeoutSeconds)))) }}

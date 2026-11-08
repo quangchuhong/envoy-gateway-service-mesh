@@ -1,0 +1,55 @@
+{{- if .Values.networkPolicy.enabled }}
+# Chặn traffic east-west (giữa các Pod trong cụm) ở tầng mạng L3/L4.
+# Pod được chọn bởi một NetworkPolicy Ingress chỉ nhận traffic khớp ít nhất một rule; còn lại bị chặn.
+---
+# payment-service: CHỈ nhận từ Pod order-service ở namespace {{ .Values.namespaces.order }}, cổng 8080
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: payment-service-allow-order
+  namespace: {{ .Values.namespaces.payment }}
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: payment-service
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.namespaces.order }}
+          podSelector:
+            matchLabels:
+              app: order-service
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# order-service: CHỈ nhận từ Pod Envoy proxy của Envoy Gateway, cổng 8080
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: order-service-allow-gateway
+  namespace: {{ .Values.namespaces.order }}
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: order-service
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.envoyGatewayNamespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: envoy
+              app.kubernetes.io/component: proxy
+      ports:
+        - protocol: TCP
+          port: 8080
+{{- end }}

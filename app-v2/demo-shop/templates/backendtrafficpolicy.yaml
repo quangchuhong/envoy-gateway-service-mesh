@@ -1,0 +1,23 @@
+# Timeout Envoy -> order-service. Chỉ retry lỗi kết nối (request chưa tới app), không retry 5xx
+# vì POST /api/orders không idempotent (retry có thể tạo 2 đơn, trừ tiền 2 lần).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: shop-api-traffic
+  namespace: {{ .Values.namespaces.order }}
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: shop-api
+  timeout:
+    http:
+      requestTimeout: {{ .Values.requestTimeout }}
+  retry:
+    numRetries: 2
+    retryOn:
+      triggers:
+        - connect-failure
+        - refused-stream

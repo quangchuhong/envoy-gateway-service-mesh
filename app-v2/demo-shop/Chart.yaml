@@ -1,0 +1,6 @@
+apiVersion: v2
+name: demo-shop
+description: "Demo order-service + payment-service: client -> Envoy Gateway (JWT Cognito) -> order-service -> payment-service (east-west)"
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

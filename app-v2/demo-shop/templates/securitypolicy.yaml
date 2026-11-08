@@ -1,0 +1,61 @@
+{{- $a := .Values.authz -}}
+# Xác thực + phân quyền ở gateway (order-service không tự kiểm tra token):
+#  JWT  : bắt buộc access token Cognito. claim "sub" -> header x-jwt-sub (order-service ghi làm customer).
+#         x-jwt-sub client tự gửi bị xoá ở ClientTrafficPolicy của eg-platform (stripRequestHeaders).
+#  AuthZ: chặn ID token; GET: {{ join ", " $a.readGroups }}; POST: {{ join ", " $a.writeGroups }}; còn lại 403.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: shop-api-auth
+  namespace: {{ .Values.namespaces.order }}
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: shop-api
+  jwt:
+    providers:
+      - name: cognito
+        issuer: {{ .Values.cognito.issuer | quote }}
+        remoteJWKS:
+          uri: "{{ .Values.cognito.issuer }}/.well-known/jwks.json"
+        claimToHeaders:
+          - claim: sub
+            header: x-jwt-sub
+  authorization:
+    defaultAction: Deny
+    rules:
+      - name: reject-id-tokens
+        action: Deny
+        principal:
+          jwt:
+            provider: cognito
+            claims:
+              - name: token_use
+                values: ["id"]
+      - name: read-orders
+        action: Allow
+        operation:
+          methods: ["GET", "HEAD"]
+        principal:
+          jwt:
+            provider: cognito
+            claims:
+              - name: "cognito:groups"
+                valueType: StringArray
+                values:
+                  {{- toYaml $a.readGroups | nindent 18 }}
+      - name: create-orders
+        action: Allow
+        operation:
+          methods: ["POST"]
+        principal:
+          jwt:
+            provider: cognito
+            claims:
+              - name: "cognito:groups"
+                valueType: StringArray
+                values:
+                  {{- toYaml $a.writeGroups | nindent 18 }}
