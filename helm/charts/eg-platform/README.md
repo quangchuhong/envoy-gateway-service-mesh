@@ -88,10 +88,10 @@ User ─HTTPS─► NLB (cert ACM) ─TLS─► Pod Envoy :10443
 ### 3.1 Domain
 
 ```yaml
-domain: demo.example.com
+domain: gitlabonlinecom.click
 ```
 
-Chỉ dùng ở `tls-secret.yaml` để đặt tên miền trong cert self-signed (`CN=*.demo.example.com`, SAN `*.demo.example.com` và `demo.example.com`). Hostname của từng app do chart app quyết định, không phải chart này.
+Chỉ dùng ở `tls-secret.yaml` để đặt tên miền trong cert self-signed (`CN=*.gitlabonlinecom.click`, SAN `*.gitlabonlinecom.click` và `gitlabonlinecom.click`). Hostname của từng app do chart app quyết định, không phải chart này.
 
 ### 3.2 GatewayClass
 
@@ -179,7 +179,7 @@ kubectl label namespace <ns> gateway.demo.io/attach=true
 
 #### Vì sao listener HTTPS **không** đặt `hostname`?
 
-Gateway API cho phép đặt `hostname: "*.demo.example.com"` trên listener. Repo cố ý **không** đặt. Khi listener có hostname, Envoy chọn cấu hình TLS theo **SNI** trong bản tin bắt tay TLS. NLB (và F5 sau này) khi re-encrypt tới Envoy **có thể không gửi SNI**, nên kết nối sẽ bị từ chối. Bỏ hostname thì Envoy nhận mọi kết nối TLS, và việc phân biệt app được làm ở `HTTPRoute.spec.hostnames` (dựa vào header `Host`).
+Gateway API cho phép đặt `hostname: "*.gitlabonlinecom.click"` trên listener. Repo cố ý **không** đặt. Khi listener có hostname, Envoy chọn cấu hình TLS theo **SNI** trong bản tin bắt tay TLS. NLB (và F5 sau này) khi re-encrypt tới Envoy **có thể không gửi SNI**, nên kết nối sẽ bị từ chối. Bỏ hostname thì Envoy nhận mọi kết nối TLS, và việc phân biệt app được làm ở `HTTPRoute.spec.hostnames` (dựa vào header `Host`).
 
 #### Cổng thật trong container
 
@@ -202,7 +202,7 @@ spec:
             statusCode: 301
 ```
 
-Route này không có `hostnames` và `matches`, nên áp cho **mọi** host và mọi path trên cổng 80: `http://partner.demo.example.com/v1/x` → `301` → `https://partner.demo.example.com/v1/x`.
+Route này không có `hostnames` và `matches`, nên áp cho **mọi** host và mọi path trên cổng 80: `http://partner.gitlabonlinecom.click/v1/x` → `301` → `https://partner.gitlabonlinecom.click/v1/x`.
 
 ### 3.5 TLS
 
@@ -332,7 +332,8 @@ envoyProxy:
     nlb:
       enabled: true
       scheme: internet-facing
-      acmCertArn: ""
+      # cert *.gitlabonlinecom.click đã import vào ACM (account 609320954321)
+      acmCertArn: "arn:aws:acm:ap-southeast-1:609320954321:certificate/569f4470-6ac3-4ef2-be6e-7eb012397305"
       sslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
       preserveClientIP: true
       deregistrationDelaySeconds: 30
@@ -583,11 +584,11 @@ Phía F5: pool trỏ tới Pod IP cổng **10443** (CIS) hoặc `<node>:<nodePor
 File values sinh tự động `helm/values/generated/eg-platform.yaml`:
 
 ```yaml
-domain: demo.example.com
+domain: gitlabonlinecom.click
 envoyProxy:
   service:
     nlb:
-      acmCertArn: "arn:aws:acm:ap-southeast-1:111111111111:certificate/xxxxxxxx-..."
+      acmCertArn: "arn:aws:acm:ap-southeast-1:609320954321:certificate/569f4470-6ac3-4ef2-be6e-7eb012397305"
 ```
 
 Cài:
@@ -661,7 +662,7 @@ Chạy nhóm test của Gateway: `tests/run-tests.sh gw` (GW-01 đến GW-04).
 | GatewayClass `ACCEPTED=False` | `controllerName` không khớp cấu hình của Envoy Gateway, hoặc `EnvoyProxy` sai | `kubectl describe gatewayclass eg-demo` |
 | Gateway không có `ADDRESS` | Chưa có AWS Load Balancer Controller, subnet thiếu tag `kubernetes.io/role/elb=1`, hoặc IAM thiếu quyền | `kubectl describe svc -n eg-gateway`; log của `aws-load-balancer-controller` |
 | Trình duyệt báo cert không hợp lệ | Đang ở chế độ `nlb-tcp` với cert self-signed | Đặt `nlb.acmCertArn`, hoặc dùng cert thật với `tls.create=false` |
-| `curl` báo lỗi TLS khi có ACM | Cert ACM không phủ hostname (ví dụ cert `demo.example.com` nhưng gọi `portal.demo.example.com`) | Dùng cert wildcard `*.demo.example.com` |
+| `curl` báo lỗi TLS khi có ACM | Cert ACM không phủ hostname (ví dụ cert `gitlabonlinecom.click` nhưng gọi `portal.gitlabonlinecom.click`) | Dùng cert wildcard `*.gitlabonlinecom.click` |
 | Route của app báo `NotAllowedByListeners` | Namespace app thiếu label `gateway.demo.io/attach=true` | Gắn label cho namespace |
 | Rate limit theo IP chặn tất cả mọi người cùng lúc | Envoy thấy cùng một IP cho mọi request (`preserveClientIP: false`, hoặc có proxy phía trước mà vẫn để `direct`) | Bật `preserveClientIP`, hoặc đổi `clientIPDetection: xff` |
 | Header danh tính bị giả mạo được | Header mới chưa có trong `stripRequestHeaders` | Thêm vào danh sách |

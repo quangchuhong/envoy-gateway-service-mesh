@@ -66,7 +66,7 @@ Trình duyệt ──► Envoy Gateway (Gateway eg-gateway, listener https)
 ### 3.1 Domain và hostname
 
 ```yaml
-domain: demo.example.com
+domain: gitlabonlinecom.click
 hostPrefix: portal
 ```
 
@@ -78,12 +78,12 @@ Dùng trong `_helpers.tpl` để tạo hostname đầy đủ:
 {{- end -}}
 ```
 
-Hostname `portal.demo.example.com` này xuất hiện ở **2 chỗ**, và cả hai phải khớp với thực tế:
+Hostname `portal.gitlabonlinecom.click` này xuất hiện ở **2 chỗ**, và cả hai phải khớp với thực tế:
 
 | Chỗ dùng | Kết quả render | Nếu sai |
 |---|---|---|
-| `HTTPRoute.spec.hostnames` | `- "portal.demo.example.com"` | Request tới đúng domain nhưng Envoy trả `404` (không có route khớp) |
-| `SecurityPolicy.oidc.redirectURL` | `https://portal.demo.example.com/oauth2/callback` | Cognito báo `redirect_mismatch` |
+| `HTTPRoute.spec.hostnames` | `- "portal.gitlabonlinecom.click"` | Request tới đúng domain nhưng Envoy trả `404` (không có route khớp) |
+| `SecurityPolicy.oidc.redirectURL` | `https://portal.gitlabonlinecom.click/oauth2/callback` | Cognito báo `redirect_mismatch` |
 
 > `redirectURL` phải **trùng từng ký tự** với *Callback URL* đã khai báo trong app client `portal-web` của Cognito (script `02-cognito-setup.sh` đã khai báo đúng giá trị này).
 
@@ -505,7 +505,7 @@ resources:
 File values sinh tự động (`helm/values/generated/demo-portal.yaml`) chỉ chứa phần phụ thuộc môi trường:
 
 ```yaml
-domain: demo.example.com
+domain: gitlabonlinecom.click
 cognito:
   issuer: "https://cognito-idp.ap-southeast-1.amazonaws.com/ap-southeast-1_AbCdEf123"
   clientId: "1abc2def3ghi4jkl5mno6pqr7s"

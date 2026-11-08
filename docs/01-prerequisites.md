@@ -24,7 +24,7 @@ Sửa các biến trong `config/demo.env`:
 | `AWS_REGION`, `EKS_CLUSTER_NAME` | Region và tên cụm EKS hiện tại |
 | `DOMAIN` | Domain cho demo, 3 app sẽ là `portal.`, `api.`, `partner.` + `DOMAIN` |
 | `HOSTED_ZONE_ID` | Hosted zone Route 53 chứa `DOMAIN` |
-| `ACM_CERT_ARN` | Cert ACM **cùng region**, nên là wildcard `*.DOMAIN` (ví dụ `*.demo.example.com`) |
+| `ACM_CERT_ARN` | Cert ACM **cùng region**, nên là wildcard `*.DOMAIN` (ví dụ `*.gitlabonlinecom.click`) |
 | `COGNITO_DOMAIN_PREFIX` | Prefix cho Hosted UI, phải duy nhất trong region |
 
 Trỏ `kubectl` vào cụm:
@@ -59,7 +59,30 @@ Public subnet phải có tag `kubernetes.io/role/elb=1` để NLB internet-facin
 
 ## 4. Cert ACM
 
-Yêu cầu cert wildcard cho domain demo (xác thực DNS qua Route 53):
+**Môi trường hiện tại đã có cert**, không cần tạo mới:
+
+| | |
+|---|---|
+| ARN | `arn:aws:acm:ap-southeast-1:609320954321:certificate/569f4470-6ac3-4ef2-be6e-7eb012397305` |
+| Domain | `*.gitlabonlinecom.click` |
+| Account / region | `609320954321` / `ap-southeast-1` |
+
+ARN đã được đặt sẵn trong `config/demo.env.example` (`ACM_CERT_ARN`) và làm giá trị mặc định của chart `eg-platform`. Xem thông tin cert:
+
+```bash
+aws acm describe-certificate --region ap-southeast-1 --certificate-arn arn:aws:acm:ap-southeast-1:609320954321:certificate/569f4470-6ac3-4ef2-be6e-7eb012397305 --query 'Certificate.{Status:Status,Domain:DomainName,SANs:SubjectAlternativeNames,NotAfter:NotAfter,Type:Type}'
+```
+
+Điều kiện để NLB dùng được cert, đều được `scripts/01-check-prereqs.sh` kiểm tra tự động:
+
+- Trạng thái `ISSUED`.
+- Cùng **region** với cụm EKS (`ap-southeast-1`).
+- Cùng **account** với cụm EKS (`609320954321`). NLB không dùng được cert ACM của account khác.
+- Phủ đủ 3 hostname: `portal.`, `api.`, `partner.gitlabonlinecom.click`. Wildcard `*.gitlabonlinecom.click` chỉ phủ **một cấp** subdomain, nên không dùng được cho tên dạng `a.b.gitlabonlinecom.click`.
+
+> Cert **mua ngoài rồi import vào ACM** sẽ **không tự gia hạn** như cert do ACM cấp. Nhớ import lại cert mới (dùng `aws acm import-certificate --certificate-arn <ARN cũ>` để giữ nguyên ARN) trước ngày hết hạn. Khi giữ nguyên ARN, NLB tự dùng cert mới mà không cần cài lại chart. Script kiểm tra in ra ngày hết hạn của cert.
+
+Môi trường khác, nếu cần tạo cert mới do ACM cấp (xác thực DNS qua Route 53):
 
 ```bash
 aws acm request-certificate --region "$AWS_REGION" --domain-name "*.${DOMAIN}" --subject-alternative-names "${DOMAIN}" --validation-method DNS

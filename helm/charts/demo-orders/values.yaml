@@ -8,7 +8,7 @@
 #   /orders/slow       -> /delay/5             backend trả lời sau 5s           - demo TIMEOUT + CIRCUIT BREAKER
 #   /orders/chaos/*    -> /anything/chaos/*    gateway tự chèn lỗi/độ trễ       - demo FAULT INJECTION
 
-domain: demo.example.com
+domain: gitlabonlinecom.click
 hostPrefix: api
 
 gateway:

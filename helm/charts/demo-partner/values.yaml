@@ -5,7 +5,7 @@
 #
 #   /v1/*  -> /anything/v1/*   (httpbin echo lại request: dễ kiểm tra header gateway gắn vào)
 
-domain: demo.example.com
+domain: gitlabonlinecom.click
 hostPrefix: partner
 
 gateway:

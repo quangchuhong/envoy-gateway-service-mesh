@@ -62,7 +62,7 @@ demo-partner/
 ### 3.1 Domain, hostname, Gateway
 
 ```yaml
-domain: demo.example.com
+domain: gitlabonlinecom.click
 hostPrefix: partner
 
 gateway:
@@ -71,7 +71,7 @@ gateway:
   sectionName: https
 ```
 
-`_helpers.tpl` ghép thành `partner.demo.example.com` cho `HTTPRoute.spec.hostnames`, và `parentRefs` trỏ vào listener `https` của Gateway dùng chung. Namespace `demo-partner` phải có label `gateway.demo.io/attach=true`.
+`_helpers.tpl` ghép thành `partner.gitlabonlinecom.click` cho `HTTPRoute.spec.hostnames`, và `parentRefs` trỏ vào listener `https` của Gateway dùng chung. Namespace `demo-partner` phải có label `gateway.demo.io/attach=true`.
 
 ### 3.2 Image và số Pod
 

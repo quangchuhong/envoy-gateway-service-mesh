@@ -30,6 +30,7 @@ deploy_platform() {
   kubectl wait --timeout=5m -n eg-gateway gateway/eg-gateway --for=condition=Programmed
   ok "Gateway đã Programmed"
   kubectl get gateway -n eg-gateway eg-gateway
+  log "Bước tiếp theo: tạo DNS *.${DOMAIN} -> NLB bằng scripts/05-dns.sh"
 }
 
 deploy_apps() {

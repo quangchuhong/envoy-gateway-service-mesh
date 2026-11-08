@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------
 
 # Domain gốc của các app demo: portal.<domain>, api.<domain>, partner.<domain>
-domain: demo.example.com
+domain: gitlabonlinecom.click
 
 gatewayClass:
   name: eg-demo
@@ -63,7 +63,7 @@ envoyProxy:
       scheme: internet-facing
       # Có giá trị  -> chế độ "nlb-tls": NLB terminate TLS bằng cert ACM (public), re-encrypt tới Envoy.
       # Để trống    -> chế độ "nlb-tcp": NLB chỉ chuyển TCP, Envoy terminate TLS bằng tls.secretName.
-      acmCertArn: ""
+      acmCertArn: "arn:aws:acm:ap-southeast-1:609320954321:certificate/569f4470-6ac3-4ef2-be6e-7eb012397305"
       sslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
       # Giữ IP thật của client (NLB là L4, không chèn X-Forwarded-For)
       preserveClientIP: true

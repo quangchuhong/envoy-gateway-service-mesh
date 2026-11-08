@@ -73,7 +73,7 @@ Client ── Authorization: Bearer <access token> ──► Envoy Gateway
 ### 3.1 Domain, hostname, Gateway
 
 ```yaml
-domain: demo.example.com
+domain: gitlabonlinecom.click
 hostPrefix: api
 
 gateway:
@@ -82,7 +82,7 @@ gateway:
   sectionName: https
 ```
 
-Giống chart `demo-portal`: `_helpers.tpl` ghép thành `api.demo.example.com`, đặt vào `hostnames` của **cả 4** HTTPRoute, và `parentRefs` trỏ vào listener `https` của Gateway `eg-gateway`. Namespace `demo-orders` phải có label `gateway.demo.io/attach=true`.
+Giống chart `demo-portal`: `_helpers.tpl` ghép thành `api.gitlabonlinecom.click`, đặt vào `hostnames` của **cả 4** HTTPRoute, và `parentRefs` trỏ vào listener `https` của Gateway `eg-gateway`. Namespace `demo-orders` phải có label `gateway.demo.io/attach=true`.
 
 ### 3.2 Image và phiên bản
 
@@ -333,7 +333,7 @@ cors:
 Preflight (`OPTIONS`) được Envoy trả lời ở bước CORS, **trước** bước JWT, nên không cần token. Ví dụ thêm origin:
 
 ```bash
---set 'cors.extraAllowOrigins={https://admin.demo.example.com}'
+--set 'cors.extraAllowOrigins={https://admin.gitlabonlinecom.click}'
 ```
 
 ### 3.8 Rate limit theo user
@@ -500,7 +500,7 @@ resources:
 File sinh tự động `helm/values/generated/demo-orders.yaml`:
 
 ```yaml
-domain: demo.example.com
+domain: gitlabonlinecom.click
 cognito:
   issuer: "https://cognito-idp.ap-southeast-1.amazonaws.com/ap-southeast-1_AbCdEf123"
 ```

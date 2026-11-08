@@ -94,7 +94,22 @@ echo "$NLB_DNS"
 
 ## 5. Tạo bản ghi DNS
 
-Tạo bản ghi **wildcard** `*.<DOMAIN>` (Alias A) trỏ về NLB, gồm cả `unknown.<DOMAIN>` dùng cho test GW-03:
+Tạo bản ghi **wildcard** `*.<DOMAIN>` (Alias A) trỏ về NLB. Với cấu hình hiện tại là `*.gitlabonlinecom.click`, bản ghi này phủ cả `portal.`, `api.`, `partner.`, và `unknown.gitlabonlinecom.click` dùng cho test GW-03:
+
+```bash
+./scripts/05-dns.sh
+```
+
+Script làm các việc sau:
+
+1. Lấy DNS name của NLB từ `status.addresses` của Gateway `eg-gateway`.
+2. Tìm hosted zone ID chuẩn (canonical) của NLB (cần cho bản ghi Alias).
+3. Tìm **public** hosted zone của `DOMAIN` trong Route 53 (hoặc dùng `HOSTED_ZONE_ID` nếu đã đặt trong `config/demo.env`).
+4. `UPSERT` bản ghi Alias A `*.DOMAIN` → NLB, rồi chờ Route 53 xác nhận thay đổi đã áp dụng.
+
+Chạy lại script là an toàn (`UPSERT` ghi đè bản ghi cũ). Cần chạy lại khi NLB bị tạo mới, ví dụ sau khi gỡ và cài lại `eg-platform`.
+
+Làm bằng tay (tương đương script):
 
 ```bash
 NLB_ZONE=$(aws elbv2 describe-load-balancers --region "$AWS_REGION" --query "LoadBalancers[?DNSName=='${NLB_DNS}'].CanonicalHostedZoneId" --output text)

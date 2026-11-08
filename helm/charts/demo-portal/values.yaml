@@ -2,7 +2,7 @@
 # Cài vào namespace "demo-portal":
 #   helm upgrade --install demo-portal helm/charts/demo-portal -n demo-portal -f helm/values/generated/demo-portal.yaml
 
-domain: demo.example.com
+domain: gitlabonlinecom.click
 hostPrefix: portal
 
 gateway:

@@ -31,9 +31,31 @@ else
 fi
 
 if [[ -n "${ACM_CERT_ARN:-}" ]]; then
-  log "Kiểm tra ACM cert"
-  st=$(aws acm describe-certificate --region "$AWS_REGION" --certificate-arn "$ACM_CERT_ARN" --query Certificate.Status --output text 2>/dev/null || echo NOT_FOUND)
-  [[ "$st" == "ISSUED" ]] && ok "ACM cert ISSUED" || warn "ACM cert trạng thái: $st"
+  log "Kiểm tra ACM cert: $ACM_CERT_ARN"
+  # ARN dạng arn:aws:acm:<region>:<account>:certificate/<id>
+  cert_region=$(cut -d: -f4 <<< "$ACM_CERT_ARN"); cert_account=$(cut -d: -f5 <<< "$ACM_CERT_ARN")
+  my_account=$(aws sts get-caller-identity --query Account --output text)
+  [[ "$cert_region" == "$AWS_REGION" ]] && ok "Cert cùng region $AWS_REGION" \
+    || die "Cert ở region $cert_region, cụm ở $AWS_REGION. NLB chỉ dùng được cert ACM cùng region."
+  [[ "$cert_account" == "$my_account" ]] && ok "Cert cùng account $my_account" \
+    || die "Cert thuộc account $cert_account, đang dùng account $my_account. NLB chỉ dùng được cert cùng account."
+
+  cert_json=$(aws acm describe-certificate --region "$AWS_REGION" --certificate-arn "$ACM_CERT_ARN" --output json 2>/dev/null) \
+    || die "Không đọc được cert (sai ARN hoặc thiếu quyền acm:DescribeCertificate)"
+  st=$(jq -r .Certificate.Status <<< "$cert_json")
+  [[ "$st" == "ISSUED" ]] && ok "Cert trạng thái ISSUED" || die "Cert trạng thái $st (cần ISSUED)"
+  ok "Cert hết hạn: $(jq -r .Certificate.NotAfter <<< "$cert_json")"
+
+  # Mỗi hostname của app phải khớp một tên trong cert (khớp chính xác, hoặc wildcard "*." đúng 1 cấp)
+  mapfile -t sans < <(jq -r '.Certificate.SubjectAlternativeNames[], .Certificate.DomainName' <<< "$cert_json" | sort -u)
+  ok "Tên trong cert: ${sans[*]}"
+  for h in "portal.${DOMAIN}" "api.${DOMAIN}" "partner.${DOMAIN}"; do
+    covered=no
+    for s in "${sans[@]}"; do
+      if [[ "$s" == "$h" ]] || { [[ "$s" == \*.* ]] && [[ "${h#*.}" == "${s#\*.}" ]]; }; then covered=yes; break; fi
+    done
+    [[ "$covered" == yes ]] && ok "Cert phủ $h" || die "Cert KHÔNG phủ $h. Kiểm tra DOMAIN trong config/demo.env."
+  done
 fi
 
 ok "Hoàn tất kiểm tra"

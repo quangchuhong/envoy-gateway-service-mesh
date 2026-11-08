@@ -8,7 +8,7 @@ Repo này triển khai **Envoy Gateway** làm API Gateway cho cụm EKS, với 3
  👤 User
    │ HTTPS
    ▼
- DNS (Route 53: *.demo.example.com)
+ DNS (Route 53: *.gitlabonlinecom.click)
    │
    ▼
 ┌──────────────────────────────────────────────────────┐
@@ -69,12 +69,27 @@ Dùng chung cho cả 3 app (ở mức Gateway): redirect HTTP→HTTPS, TLS, heal
 │   ├── 02-cognito-setup.sh        # Tạo Cognito bằng AWS CLI
 │   ├── 03-gen-values.sh           # Sinh values từ config/*.env
 │   ├── 04-deploy.sh               # helm upgrade --install theo thứ tự
+│   ├── 05-dns.sh                  # Route 53: *.<domain> → NLB của Gateway
 │   ├── get-token.sh               # Lấy token Cognito (user / máy) để test
 │   ├── render-all.sh              # helm template ra rendered/*.yaml
 │   ├── validate.sh                # helm lint + kiểm tra schema CRD
 │   └── 99-cleanup.sh              # Gỡ demo
 └── tests/run-tests.sh             # 47 test case tự động
 ```
+
+## Môi trường đang cấu hình
+
+| Mục | Giá trị | Cấu hình ở |
+|---|---|---|
+| Region | `ap-southeast-1` | `config/demo.env.example` (`AWS_REGION`) |
+| Domain | `gitlabonlinecom.click` | `config/demo.env.example` (`DOMAIN`), mặc định `domain` của các chart |
+| Cert public (ACM) | `arn:aws:acm:ap-southeast-1:609320954321:certificate/569f4470-6ac3-4ef2-be6e-7eb012397305` (`*.gitlabonlinecom.click`) | `config/demo.env.example` (`ACM_CERT_ARN`), mặc định `envoyProxy.service.nlb.acmCertArn` của `eg-platform` |
+| App 1 – Portal | `https://portal.gitlabonlinecom.click` | |
+| App 2 – Orders API | `https://api.gitlabonlinecom.click/orders` | |
+| App 3 – Partner API | `https://partner.gitlabonlinecom.click/v1` | |
+| Cognito Hosted UI | `https://gitlabonlinecom-eg-demo.auth.ap-southeast-1.amazoncognito.com` | `config/demo.env.example` (`COGNITO_DOMAIN_PREFIX`) |
+
+NLB terminate TLS bằng cert ACM ở trên (chế độ `nlb-tls`), rồi mã hoá lại tới Envoy. Cert phải cùng **account** và **region** với cụm EKS; `scripts/01-check-prereqs.sh` kiểm tra điều này cùng với trạng thái `ISSUED` và việc cert phủ đủ 3 hostname.
 
 ## Bắt đầu nhanh
 
@@ -104,7 +119,11 @@ cp config/demo.env.example config/demo.env
 ./scripts/04-deploy.sh platform
 ```
 
-Tạo bản ghi DNS `*.<domain>` trỏ về NLB ([docs/04](docs/04-platform.md)), rồi:
+Tạo bản ghi DNS wildcard `*.gitlabonlinecom.click` trỏ về NLB:
+
+```bash
+./scripts/05-dns.sh
+```
 
 ```bash
 ./scripts/04-deploy.sh apps
