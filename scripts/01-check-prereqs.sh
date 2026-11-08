@@ -87,7 +87,13 @@ fi
 
 log "Kiểm tra CRD Gateway API đã tồn tại từ trước (tránh xung đột phiên bản)"
 if kubectl get crd gateways.gateway.networking.k8s.io >/dev/null 2>&1; then
-  warn "Cụm đã có Gateway API CRD (bundle-version: $(kubectl get crd gateways.gateway.networking.k8s.io -o jsonpath='{.metadata.annotations.gateway\.networking\.k8s\.io/bundle-version}')). Xem docs/03 mục 'Cụm đã có Gateway API CRD'."
+  gw_bundle=$(kubectl get crd gateways.gateway.networking.k8s.io -o jsonpath='{.metadata.annotations.gateway\.networking\.k8s\.io/bundle-version}' 2>/dev/null || true)
+  if helm status eg -n envoy-gateway-system >/dev/null 2>&1; then
+    # CRD do chính release Envoy Gateway của repo (bước 04-deploy.sh eg) cài
+    ok "Gateway API CRD (bundle ${gw_bundle:-?}) do release Envoy Gateway 'eg' cài"
+  else
+    warn "Cụm đã có Gateway API CRD (bundle-version: ${gw_bundle:-?}) từ nguồn khác. Xem docs/03 mục 'Cụm đã có Gateway API CRD'."
+  fi
 else
   ok "Chưa có Gateway API CRD, chart Envoy Gateway sẽ cài"
 fi
