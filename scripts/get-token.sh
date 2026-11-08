@@ -11,7 +11,8 @@ require_cmd aws curl jq
 decode() {
   local p; p=$(echo "$1" | cut -d. -f2 | tr '_-' '/+')
   while (( ${#p} % 4 )); do p="${p}="; done
-  echo "$p" | base64 -d 2>/dev/null | jq .
+  # openssl thay cho "base64 -d": macOS cũ dùng "base64 -D", Linux dùng "-d"
+  echo "$p" | openssl base64 -d -A 2>/dev/null | jq .
 }
 
 case "${1:-}" in

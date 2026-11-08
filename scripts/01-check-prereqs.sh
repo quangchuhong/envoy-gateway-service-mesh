@@ -47,7 +47,11 @@ if [[ -n "${ACM_CERT_ARN:-}" ]]; then
   ok "Cert hết hạn: $(jq -r .Certificate.NotAfter <<< "$cert_json")"
 
   # Mỗi hostname của app phải khớp một tên trong cert (khớp chính xác, hoặc wildcard "*." đúng 1 cấp)
-  mapfile -t sans < <(jq -r '.Certificate.SubjectAlternativeNames[], .Certificate.DomainName' <<< "$cert_json" | sort -u)
+  # (không dùng mapfile: bash 3.2 mặc định của macOS không có lệnh này)
+  sans=()
+  while IFS= read -r name; do
+    [[ -n "$name" ]] && sans+=("$name")
+  done < <(jq -r '.Certificate.SubjectAlternativeNames[], .Certificate.DomainName' <<< "$cert_json" | sort -u)
   ok "Tên trong cert: ${sans[*]}"
   for h in "portal.${DOMAIN}" "api.${DOMAIN}" "partner.${DOMAIN}"; do
     covered=no

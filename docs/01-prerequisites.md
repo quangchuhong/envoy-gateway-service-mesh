@@ -11,6 +11,12 @@
 | `kubeconform` | 0.6+ (tuỳ chọn) | `scripts/validate.sh` |
 | `egctl` | trùng phiên bản Envoy Gateway (tuỳ chọn) | Debug cấu hình Envoy |
 
+Script chạy được trên **macOS** (bash 3.2 mặc định của Apple) lẫn Linux (bash 4/5). Không cần cài bash mới; chỉ cần `jq`:
+
+```bash
+brew install jq
+```
+
 ## 2. Cấu hình môi trường
 
 ```bash

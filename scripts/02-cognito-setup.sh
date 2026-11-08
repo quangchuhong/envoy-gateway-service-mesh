@@ -100,7 +100,15 @@ ok "orders-m2m: $M2M_CLIENT_ID"
 
 log "Tạo user test"
 gen_pw() { echo "Eg$(openssl rand -hex 8)#1"; }
-declare -A USERS=( [admin]=devops-admin [dev]=developer [viewer]=viewer [nogroup]="" )
+# user -> group (dùng hàm thay cho "declare -A": bash 3.2 mặc định của macOS không có mảng kết hợp)
+user_group() {
+  case "$1" in
+    admin) echo devops-admin ;;
+    dev) echo developer ;;
+    viewer) echo viewer ;;
+    *) echo "" ;;
+  esac
+}
 {
   echo "# Sinh bởi scripts/02-cognito-setup.sh - KHÔNG commit"
   echo "export COGNITO_USER_POOL_ID=$POOL_ID"
@@ -115,18 +123,18 @@ declare -A USERS=( [admin]=devops-admin [dev]=developer [viewer]=viewer [nogroup
 chmod 600 "$OUT"
 
 for u in admin dev viewer nogroup; do
-  email="eg-demo-${u}@example.com"; pw=$(gen_pw); up=$(echo "$u" | tr '[:lower:]' '[:upper:]')
+  email="eg-demo-${u}@example.com"; pw=$(gen_pw); up=$(echo "$u" | tr '[:lower:]' '[:upper:]'); grp=$(user_group "$u")
   aws cognito-idp admin-create-user $R --user-pool-id "$POOL_ID" --username "$email" \
     --user-attributes Name=email,Value="$email" Name=email_verified,Value=true \
     --message-action SUPPRESS >/dev/null
   aws cognito-idp admin-set-user-password $R --user-pool-id "$POOL_ID" --username "$email" \
     --password "$pw" --permanent
-  if [[ -n "${USERS[$u]}" ]]; then
-    aws cognito-idp admin-add-user-to-group $R --user-pool-id "$POOL_ID" --username "$email" --group-name "${USERS[$u]}"
+  if [[ -n "$grp" ]]; then
+    aws cognito-idp admin-add-user-to-group $R --user-pool-id "$POOL_ID" --username "$email" --group-name "$grp"
   fi
   echo "export USER_${up}_EMAIL=$email" >> "$OUT"
   echo "export USER_${up}_PASSWORD='$pw'" >> "$OUT"
-  ok "user $email (group: ${USERS[$u]:-<không có>})"
+  ok "user $email (group: ${grp:-<không có>})"
 done
 
 # Tạo API key cho App 3 (partner) - lưu cùng file để dùng lại khi cài chart và khi test

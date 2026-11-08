@@ -17,7 +17,8 @@ if ! $example; then load_env; fi
 render() { # release chart namespace [extra args...]
   local rel=$1 chart=$2 ns=$3; shift 3
   local vf=(); if ! $example && [[ -f "$VALUES/$chart.yaml" ]]; then vf=(-f "$VALUES/$chart.yaml"); fi
-  helm template "$rel" "$CHARTS/$chart" -n "$ns" "${vf[@]}" "$@" > "$OUT/$chart.yaml"
+  # ${vf[@]+"${vf[@]}"}: tránh lỗi "unbound variable" của bash 3.2 (macOS) khi mảng rỗng và có set -u
+  helm template "$rel" "$CHARTS/$chart" -n "$ns" ${vf[@]+"${vf[@]}"} "$@" > "$OUT/$chart.yaml"
   ok "rendered/$chart.yaml"
 }
 
